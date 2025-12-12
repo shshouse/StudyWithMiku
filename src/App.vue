@@ -97,7 +97,8 @@ const onUITouchEnd = () => {
 const videoRef = ref(null)
 const videos = [
   '/1.mp4',
-  '/2.mp4'
+  '/2.mp4',
+  '/3.mp4'
 ]
 const currentVideo = ref(videos[0])
 const currentVideoIndex = ref(0)
