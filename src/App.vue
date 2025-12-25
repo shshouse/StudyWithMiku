@@ -391,4 +391,23 @@ onUnmounted(() => {
   background: #333;
   color: white;
 }
+
+/* 窄屏适配 */
+@media (max-width: 490px) {
+  .fullscreen-btn {
+    top: auto;
+    bottom: 73px;
+    left: 20px;
+    right: auto;
+    z-index: 4;    /* 防止盖住APlayer */
+  }
+
+  .switch-video-btn {
+    top: auto;
+    bottom: 116px;
+    left: 20px;
+    right: auto;
+    z-index: 4;
+  }
+}
 </style>
