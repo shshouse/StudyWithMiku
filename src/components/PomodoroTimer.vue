@@ -34,7 +34,7 @@
               <button class="nav-item" :class="{ active: currentTab === 'stats' }" @click="currentTab = 'stats'">学习数据</button>
               <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="currentTab = 'about'">关于</button>
             </div>
-            <div class="settings-content">
+            <div class="settings-content" ref="settingsContentRef">
               <div v-if="currentTab === 'pomodoro'" class="timer-container">
                 <div class="status-indicator">
                   <span class="status-text" :class="statusClass">{{ statusText }}</span>
@@ -231,8 +231,29 @@ const onUIMouseEnter = () => { setHoveringUI(true) }
 const onUIMouseLeave = () => { setHoveringUI(false) }
 const onUITouchStart = () => { setHoveringUI(true) }
 const onUITouchEnd = () => { setHoveringUI(false) }
+
+// settings-content的scrolling bar控制
+const settingsContentRef = ref(null)
+let removeScrollListener = null
+const setupScrollDetection = () => {
+  const contentElement = settingsContentRef.value
+  let timer = null
+  const handleScroll = () => { clearTimeout(timer); contentElement.classList.add('scrolling'); timer = setTimeout(() => contentElement.classList.remove('scrolling'), 350) }
+  contentElement.addEventListener('scroll', handleScroll)
+  return () => { contentElement.removeEventListener('scroll', handleScroll); clearTimeout(timer) }
+}
+// 事件监听器的生命周期
+watch(showSettings, (newVal) => {
+  if (newVal) { setTimeout(() => { if (removeScrollListener) removeScrollListener(); removeScrollListener = setupScrollDetection() }, 200) }
+  else if (removeScrollListener) { removeScrollListener(); removeScrollListener = null }
+})
+
 onMounted(() => { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); timeInterval = setInterval(() => { currentTime.value = new Date() }, 1000) })
-onUnmounted(() => { if (timer) clearInterval(timer); if (timeInterval) clearInterval(timeInterval) })
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+  if (timeInterval) clearInterval(timeInterval)
+  if (removeScrollListener) removeScrollListener()
+})
 </script>
 
 <style scoped>
@@ -265,7 +286,12 @@ onUnmounted(() => { if (timer) clearInterval(timer); if (timeInterval) clearInte
 .nav-item { background: none; border: none; color: rgba(255, 255, 255, 0.6); padding: 0.8rem 1.2rem; text-align: left; cursor: pointer; transition: all 0.3s ease; font-size: 0.85rem; }
 .nav-item:hover { color: white; background: rgba(255, 255, 255, 0.05); }
 .nav-item.active { color: white; background: rgba(255, 255, 255, 0.1); border-left: 2px solid #ff6b6b; }
-.settings-content { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; min-height: 450px; }
+.settings-content { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; min-height: 450px; scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color 0.8s ease-out; }
+.settings-content.scrolling { scrollbar-color: rgba(255, 255, 255, 0.22) transparent; transition: scrollbar-color 0.25s ease-in;}
+.settings-content::-webkit-scrollbar { width: 4px; background: transparent; }  /* weblit兼容 */
+.settings-content::-webkit-scrollbar-track { background: transparent; border: none; }
+.settings-content::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; transition: background 0.8s ease-out; }
+.settings-content.scrolling::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); transition: background 0.25s ease-in;}
 
 .timer-container { text-align: center; color: white; }
 .status-indicator { margin-bottom: 1rem; }
