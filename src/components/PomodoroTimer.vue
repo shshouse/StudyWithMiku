@@ -82,7 +82,10 @@
                   </div>
                   <div class="setting-group">
                     <label>歌单ID</label>
-                    <input type="text" v-model="inputPlaylistId" placeholder="歌单ID"/>
+                    <input type="text" v-model="inputPlaylistId" placeholder="粘贴歌单链接或ID"/>
+                  </div>
+                  <div v-if="detectedPlatformHint" class="platform-hint">
+                    {{ detectedPlatformHint }}
                   </div>
                   <div class="playlist-actions">
                     <button class="action-btn apply-btn" @click="applyPlaylist">获取</button>
@@ -132,10 +135,66 @@ import { getPomodoroSettings, savePomodoroSettings } from '../utils/userSettings
 
 const WS_URL = 'wss://online.study.mikugame.icu/ws'
 const { onlineCount, isConnected } = useOnlineCount(WS_URL)
-const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS } = useMusic()
+const { playlistId, platform, applyCustomPlaylist, resetToDefault, songs, DEFAULT_PLAYLIST_ID, PLATFORMS } = useMusic()
 
 const inputPlaylistId = ref('')
 const selectedPlatform = ref(platform.value)
+
+// 从文本中提取歌单ID
+const extractPlaylistId = (text, targetPlatform) => {
+  if (!text) return ''
+
+  const trimmed = text.trim()
+
+  // 尝试从URL中提取
+  const urlPatterns = {
+    netease: [
+      /music\.163\.com.*[?&]id=(\d+)/,
+      /music\.163\.com\/playlist\/(\d+)/
+    ],
+    tencent: [
+      /y\.qq\.com.*[?&]id=(\d+)/,
+      /y\.qq\.com\/n\/ryqq\/playlist\/(\d+)/
+    ]
+  }
+
+  const patterns = urlPatterns[targetPlatform] || []
+  for (const pattern of patterns) {
+    const match = trimmed.match(pattern)
+    if (match && match[1]) {
+      return match[1]
+    }
+  }
+
+  // 如果没匹配到URL格式，检查是否是纯数字ID
+  if (/^\d+$/.test(trimmed)) {
+    return trimmed
+  }
+
+  // 最后尝试从文本任意位置提取id参数
+  const genericIdMatch = trimmed.match(/[?&]id=(\d+)/)
+  if (genericIdMatch) {
+    return genericIdMatch[1]
+  }
+
+  return trimmed
+}
+
+// 从文本检测平台
+const detectPlatformFromText = (text) => {
+  if (!text) return null
+  if (/music\.163\.com/i.test(text)) return 'netease'
+  if (/y\.qq\.com|i\.y\.qq\.com/i.test(text)) return 'tencent'
+  return null
+}
+
+// 检测到的平台提示
+const detectedPlatformHint = computed(() => {
+  const detected = detectPlatformFromText(inputPlaylistId.value)
+  if (detected === 'netease') return '✓ 检测到网易云歌单'
+  if (detected === 'tencent') return '✓ 检测到QQ音乐歌单'
+  return ''
+})
 const currentTab = ref('pomodoro')
 const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', stats: '学习数据', about: '关于' }[currentTab.value]))
 
@@ -159,8 +218,24 @@ const addPomodoro = () => { studyStats.totalPomodoros++; studyStats.todayPomodor
 const resetStats = () => { studyStats.totalStudyTime = 0; studyStats.totalPomodoros = 0; studyStats.todayStudyTime = 0; studyStats.todayPomodoros = 0; studyStats.lastDate = getToday(); saveStats() }
 const formatStudyTime = (seconds) => { const h = Math.floor(seconds / 3600); const m = Math.floor((seconds % 3600) / 60); return h > 0 ? `${h}小时${m}分钟` : `${m}分钟` }
 
-const applyPlaylist = async () => { if (!inputPlaylistId.value) return; await applyCustomPlaylist(selectedPlatform.value, inputPlaylistId.value); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
-const resetPlaylist = async () => { inputPlaylistId.value = ''; await resetToLocal(); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
+const applyPlaylist = async () => {
+  if (!inputPlaylistId.value) return
+
+  // 自动检测平台
+  const detectedPlatform = detectPlatformFromText(inputPlaylistId.value)
+  if (detectedPlatform) {
+    selectedPlatform.value = detectedPlatform
+  }
+
+  // 提取歌单ID
+  const extractedId = extractPlaylistId(inputPlaylistId.value, selectedPlatform.value)
+  inputPlaylistId.value = extractedId
+
+  await applyCustomPlaylist(selectedPlatform.value, extractedId)
+  const ap = getAPlayerInstance()
+  if (ap) { ap.list.clear(); ap.list.add(songs.value) }
+}
+const resetPlaylist = async () => { inputPlaylistId.value = ''; await resetToDefault(); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
 const applyJazzPlaylist = async () => { await applyCustomPlaylist('netease', '8894040639'); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
 
 const STATUS = { FOCUS: 'focus', BREAK: 'break', LONG_BREAK: 'longBreak' }
@@ -310,6 +385,13 @@ onUnmounted(() => { if (timer) clearInterval(timer); if (timeInterval) clearInte
 .help-link { display: block; margin-top: 0.8rem; font-size: 0.7rem; color: rgba(255, 255, 255, 0.6); text-decoration: none; text-align: center; transition: color 0.3s ease; }
 .help-link:hover { color: rgba(255, 255, 255, 0.9); text-decoration: underline; }
 
+.platform-hint {
+  font-size: 0.75rem;
+  color: #4ecdc4;
+  margin-top: -0.4rem;
+  margin-bottom: 0.4rem;
+  text-align: right;
+}
 
 .stats-container { color: white; padding: 1rem 0; }
 .login-section { text-align: center; padding: 1rem; margin-bottom: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); }
