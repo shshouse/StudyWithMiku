@@ -6,13 +6,14 @@
           <h3>公告</h3>
           <button class="close-btn" @click="closeModal">×</button>
         </div>
-        <div class="modal-body">
-          <h2>网站即将满月，感谢大家的使用!</h2>
-          <p>1.账号系统制作中，以后可以登录MikuMod账号，记录学习时长等等</p>
-          <p>2.学习时长记录推出！可以记录学习了多久以及完成的番茄数~</p>
-          <p>3.桌面壁纸应用即将推出~</p>
-          <p>制作了一个一键打开网站的快捷方式，可以一键开始学习＞﹏＜</p>
-          <a class="notice-link" href="https://pan.quark.cn/s/f89e455f54b4" target="_blank" rel="noopener noreferrer">一键开始学习</a>
+        <div class="modal-content">
+          <div class="content-area">
+            <div class="announcement-detail">
+              <h2>{{ announcements[0].title }}</h2>
+              <div class="announcement-date">{{ announcements[0].date }}</div>
+              <div v-html="announcements[0].content" class="announcement-content"></div>
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
           <button class="confirm-btn" @click="closeModal">我知道了</button>
@@ -29,6 +30,20 @@ const STORAGE_KEY = 'announcement_last_shown'
 const INTERVAL_DAYS = 3
 
 const showModal = ref(false)
+
+const announcements = [
+  {
+    title: '最新更新',
+    date: '2025-12-27',
+    content: `
+      <p>学习辛苦了！也请注意一下休息哦~</p>
+      <p>1.对默认歌单添加了翻译，找歌更方便~</p>
+      <p>2.修复手机端的ui显示不全问题</p>
+      <p>3.修复手机端的"全屏""切换"按钮显示问题</p>
+      <p style="margin-top: 1rem; font-size: 0.9rem; opacity: 0.7;">更多更新日志请查看番茄钟设置中的"更新日志"标签页</p>
+    `
+  }
+]
 
 const shouldShowAnnouncement = () => {
   const lastShown = localStorage.getItem(STORAGE_KEY)
@@ -58,22 +73,67 @@ onMounted(() => {
 .announcement-modal {
   background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(30px);
   border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.2);
-  width: 90%; max-width: 400px; overflow: hidden;
+  width: 90%; max-width: 700px; height: 70vh; max-height: 90vh; overflow: hidden;
+  display: flex; flex-direction: column;
 }
 .modal-header {
   display: flex; justify-content: space-between; align-items: center;
   padding: 1rem 1.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
 }
 .modal-header h3 { color: white; margin: 0; font-size: 1.1rem; }
 .close-btn {
   background: none; border: none; color: white; font-size: 1.5rem;
   cursor: pointer; padding: 0.2rem; border-radius: 50%; width: 30px; height: 30px;
   display: flex; align-items: center; justify-content: center; transition: background 0.3s ease;
+  flex-shrink: 0;
 }
 .close-btn:hover { background: rgba(255, 255, 255, 0.1); }
-.modal-body { color: white; text-align: center; padding: 1.5rem; }
-.modal-body h2 { margin: 0 0 1.5rem 0; font-size: 1.3rem; }
-.modal-body p { margin: 0.8rem 0; line-height: 1.6; color: rgba(255, 255, 255, 0.8); font-size: 0.9rem; }
+.modal-content {
+  display: flex; flex: 1; overflow: hidden; min-height: 0;
+}
+.nav-sidebar {
+  width: 180px; background: rgba(0, 0, 0, 0.2); border-right: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex; flex-direction: column; padding: 0.5rem 0;
+  overflow-y: auto; flex-shrink: 0;
+}
+.nav-item {
+  display: flex; align-items: center; padding: 1rem 1.2rem;
+  cursor: pointer; transition: all 0.3s ease; border-radius: 8px;
+  margin: 0.2rem 0.5rem; color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+}
+.nav-item:hover { background: rgba(255, 255, 255, 0.1); color: white; }
+.nav-item.active {
+  background: rgba(41, 128, 185, 0.3); color: white;
+  border: 1px solid rgba(41, 128, 185, 0.5);
+}
+.nav-text { font-size: 0.95rem; }
+.content-area {
+  flex: 1; padding: 1.5rem; overflow-y: auto;
+}
+.announcement-detail { animation: fadeIn 0.3s ease; }
+.announcement-detail h2 {
+  margin: 0 0 0.5rem 0; font-size: 1.4rem; color: white;
+}
+.updates-list { display: flex; flex-direction: column; gap: 1.5rem; }
+.update-item {
+  background: rgba(0, 0, 0, 0.2); border-radius: 12px;
+  padding: 1.2rem; border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.update-date {
+  font-size: 0.9rem; color: rgba(41, 128, 185, 1);
+  margin-bottom: 0.8rem; font-weight: 500;
+}
+.update-content { color: rgba(255, 255, 255, 0.8); line-height: 1.8; }
+.update-content p { margin: 0.6rem 0; font-size: 0.9rem; }
+.announcement-date {
+  font-size: 0.85rem; color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 1.5rem; padding-bottom: 0.8rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.announcement-content { color: rgba(255, 255, 255, 0.8); line-height: 1.8; }
+.announcement-content p { margin: 0.8rem 0; font-size: 0.95rem; }
 .notice-link {
   display: inline-block; margin-top: 1rem; padding: 0.8rem 1.5rem;
   background: rgba(41, 128, 185, 0.5); border: 1px solid rgba(41, 128, 185, 0.8);
@@ -89,4 +149,11 @@ onMounted(() => {
 .confirm-btn:hover { background: rgba(76, 175, 80, 0.5); }
 .modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.3s ease; }
 .modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
+.content-fade-enter-active, .content-fade-leave-active { transition: all 0.3s ease; }
+.content-fade-enter-from { opacity: 0; transform: translateX(20px); }
+.content-fade-leave-to { opacity: 0; transform: translateX(-20px); }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 </style>

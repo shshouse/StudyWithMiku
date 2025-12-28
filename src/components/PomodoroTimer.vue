@@ -31,7 +31,10 @@
           <div class="settings-body">
             <div class="settings-nav">
               <button class="nav-item" :class="{ active: currentTab === 'pomodoro' }" @click="currentTab = 'pomodoro'">番茄钟</button>
+              <button class="nav-item" :class="{ active: currentTab === 'playlist' }" @click="currentTab = 'playlist'">歌单</button>
               <button class="nav-item" :class="{ active: currentTab === 'stats' }" @click="currentTab = 'stats'">学习数据</button>
+              <button class="nav-item" :class="{ active: currentTab === 'updates' }" @click="currentTab = 'updates'">更新日志</button>
+              <button class="nav-item" :class="{ active: currentTab === 'quickstudy' }" @click="currentTab = 'quickstudy'">一键学习</button>
               <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="currentTab = 'about'">关于</button>
             </div>
             <div class="settings-content">
@@ -73,24 +76,25 @@
                     <span v-for="i in 4" :key="i" class="pomodoro-dot" :class="{ filled: completedPomodoros >= i }"></span>
                   </div>
                 </div>
-                <div class="playlist-settings">
-                  <div class="setting-group">
-                    <label>平台</label>
-                    <select v-model="selectedPlatform" class="platform-select">
-                      <option v-for="p in PLATFORMS" :key="p.value" :value="p.value">{{ p.label }}</option>
-                    </select>
-                  </div>
-                  <div class="setting-group">
-                    <label>歌单ID</label>
-                    <input type="text" v-model="inputPlaylistId" placeholder="歌单ID"/>
-                  </div>
-                  <div class="playlist-actions">
-                    <button class="action-btn apply-btn" @click="applyPlaylist">获取</button>
-                    <button class="action-btn reset-playlist-btn" @click="resetPlaylist">恢复默认</button>
-                    <button class="action-btn jazz-btn" @click="applyJazzPlaylist">站长神秘歌单</button>
-                  </div>
-                  <a class="help-link" href="https://www.bilibili.com/opus/1144256090307821590" target="_blank">歌单ID怎么获取?</a>
+              </div>
+
+              <div v-else-if="currentTab === 'playlist'" class="playlist-container">
+                <div class="setting-group">
+                  <label>平台</label>
+                  <select v-model="selectedPlatform" class="platform-select">
+                    <option v-for="p in PLATFORMS" :key="p.value" :value="p.value">{{ p.label }}</option>
+                  </select>
                 </div>
+                <div class="setting-group">
+                  <label>歌单ID</label>
+                  <input type="text" v-model="inputPlaylistId" placeholder="歌单ID"/>
+                </div>
+                <div class="playlist-actions">
+                  <button class="action-btn apply-btn" @click="applyPlaylist">获取</button>
+                  <button class="action-btn reset-playlist-btn" @click="resetPlaylist">恢复默认</button>
+                  <button class="action-btn jazz-btn" @click="applyJazzPlaylist">站长神秘歌单</button>
+                </div>
+                <a class="help-link" href="https://www.bilibili.com/opus/1144256090307821590" target="_blank">歌单ID怎么获取?</a>
               </div>
 
               <div v-else-if="currentTab === 'stats'" class="stats-container">
@@ -103,11 +107,47 @@
                 <div class="stat-item"><span class="stat-label">今日学习</span><span class="stat-value">{{ formatStudyTime(studyStats.todayStudyTime) }}</span></div>
                 <div class="stat-item"><span class="stat-label">今日番茄</span><span class="stat-value">{{ studyStats.todayPomodoros }}</span></div>
               </div>
+              <div v-else-if="currentTab === 'updates'" class="updates-container">
+                <div class="updates-list">
+                  <div class="update-item">
+                    <div class="update-date">2025-12-27</div>
+                    <div class="update-content">
+                      <p>学习辛苦了！也请注意一下休息哦~</p>
+                      <p>1.对默认歌单添加了翻译，找歌更方便~</p>
+                      <p>2.修复手机端的ui显示不全问题</p>
+                      <p>3.修复手机端的"全屏""切换"按钮显示问题</p>
+                    </div>
+                  </div>
+                  <div class="update-item">
+                    <div class="update-date">2025-12-19</div>
+                    <div class="update-content">
+                      <p>网站即将满月，感谢大家的使用!</p>
+                      <p>1.账号系统制作中，以后可以登录MikuMod账号，记录学习时长等</p>
+                      <p>2.学习时长记录推出！可以记录学习了多久以及完成的番茄数~</p>
+                      <p>3.桌面壁纸应用即将推出~</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-else-if="currentTab === 'quickstudy'" class="quickstudy-container">
+                <div class="quickstudy-content">
+                  <p>更换为exe格式，比url更好看＞﹏＜</p>
+                  <a class="quickstudy-link" href="https://pan.quark.cn/s/f89e455f54b4" target="_blank" rel="noopener noreferrer">一键开始学习</a>
+                </div>
+              </div>
+
               <div v-else-if="currentTab === 'about'" class="about-container">
+                <div class="about-content">
+                  <p>1.StudyWithMiku是一个基于STUDYWITHMIKU企划的免费开源沉浸式学习陪伴网站</p>
+                  <p>2.项目代码在github开源，欢迎点上star！</p>
+                  <p>3.项目部署域名：study.mikugame.icu和study.mikumod.com</p>
+                  <p>4.希望你可以喜欢！在悠闲的音乐里和初音一起学习吧~</p>
+                </div>
                 <div class="about-links">
                   <a href="https://github.com/shshouse/StudyWithMiku" target="_blank" rel="noopener noreferrer" class="about-link">
                     <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-                    <span>GitHub</span>
+                    <span>GitHub仓库</span>
                   </a>
                   <a href="https://space.bilibili.com/309820452" target="_blank" rel="noopener noreferrer" class="about-link">
                     <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M17.813 4.653h.854c1.51.054 2.769.578 3.773 1.574 1.004.995 1.524 2.249 1.56 3.76v7.36c-.036 1.51-.556 2.769-1.56 3.773s-2.262 1.524-3.773 1.56H5.333c-1.51-.036-2.769-.556-3.773-1.56S.036 18.858 0 17.347v-7.36c.036-1.511.556-2.765 1.56-3.76 1.004-.996 2.262-1.52 3.773-1.574h.774l-1.174-1.12a1.234 1.234 0 0 1-.373-.906c0-.356.124-.658.373-.907l.027-.027c.267-.249.573-.373.92-.373.347 0 .653.124.92.373L9.653 4.44c.071.071.134.142.187.213h4.267a.836.836 0 0 1 .16-.213l2.853-2.747c.267-.249.573-.373.92-.373.347 0 .662.151.929.4.267.249.391.551.391.907 0 .355-.124.657-.373.906zM5.333 7.24c-.746.018-1.373.276-1.88.773-.506.498-.769 1.13-.786 1.894v7.52c.017.764.28 1.395.786 1.893.507.498 1.134.756 1.88.773h13.334c.746-.017 1.373-.275 1.88-.773.506-.498.769-1.129.786-1.893v-7.52c-.017-.765-.28-1.396-.786-1.894-.507-.497-1.134-.755-1.88-.773zM8 11.107c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c0-.373.129-.689.386-.947.258-.257.574-.386.947-.386zm8 0c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373z"/></svg>
@@ -137,7 +177,7 @@ const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_
 const inputPlaylistId = ref('')
 const selectedPlatform = ref(platform.value)
 const currentTab = ref('pomodoro')
-const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', stats: '学习数据', about: '关于' }[currentTab.value]))
+const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', playlist: '歌单设置', stats: '学习数据', updates: '更新日志', quickstudy: '一键学习', about: '关于' }[currentTab.value]))
 
 const STATS_KEY = 'study_stats'
 const getToday = () => new Date().toDateString()
@@ -255,17 +295,17 @@ onUnmounted(() => { if (timer) clearInterval(timer); if (timeInterval) clearInte
 .status-badge.break { color: #4ecdc4; }
 .status-badge.long-break { color: #45b7d1; }
 .settings-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1002; }
-.settings-panel { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(30px); border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.2); width: 90%; max-width: 550px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; }
-.settings-header { display: flex; justify-content: space-between; align-items: center; padding: 1.2rem 1.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+.settings-panel { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(30px); border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.2); width: 90%; max-width: 550px; height: 70vh; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; }
+.settings-header { display: flex; justify-content: space-between; align-items: center; padding: 1.2rem 1.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); flex-shrink: 0; }
 .settings-header h3 { color: white; margin: 0; font-size: 1.1rem; }
-.close-btn { background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.2rem; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; transition: background 0.3s ease; }
+.close-btn { background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.2rem; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; transition: background 0.3s ease; flex-shrink: 0; }
 .close-btn:hover { background: rgba(255, 255, 255, 0.1); }
 .settings-body { display: flex; flex: 1; overflow: hidden; }
-.settings-nav { display: flex; flex-direction: column; padding: 1rem 0; border-right: 1px solid rgba(255, 255, 255, 0.1); min-width: 100px; }
-.nav-item { background: none; border: none; color: rgba(255, 255, 255, 0.6); padding: 0.8rem 1.2rem; text-align: left; cursor: pointer; transition: all 0.3s ease; font-size: 0.85rem; }
+.settings-nav { display: flex; flex-direction: column; padding: 1rem 0; border-right: 1px solid rgba(255, 255, 255, 0.1); min-width: 100px; overflow-y: auto; flex-shrink: 0; }
+.nav-item { background: none; border: none; color: rgba(255, 255, 255, 0.6); padding: 0.8rem 1.2rem; text-align: left; cursor: pointer; transition: all 0.3s ease; font-size: 0.85rem; white-space: nowrap; }
 .nav-item:hover { color: white; background: rgba(255, 255, 255, 0.05); }
 .nav-item.active { color: white; background: rgba(255, 255, 255, 0.1); border-left: 2px solid #ff6b6b; }
-.settings-content { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; min-height: 450px; }
+.settings-content { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; min-height: 0; }
 
 .timer-container { text-align: center; color: white; }
 .status-indicator { margin-bottom: 1rem; }
@@ -299,10 +339,21 @@ onUnmounted(() => { if (timer) clearInterval(timer); if (timeInterval) clearInte
 .pomodoro-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); transition: background 0.3s ease; }
 .pomodoro-dot.filled { background: #ff6b6b; }
 .playlist-settings { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.playlist-container { padding: 2rem 0; display: flex; flex-direction: column; align-items: center; }
+.playlist-container .setting-group { margin-bottom: 1.5rem; width: 100%; max-width: 400px; display: flex; align-items: center; gap: 1rem; }
+.playlist-container .setting-group label { display: inline-block; margin-bottom: 0; font-size: 0.95rem; color: rgba(255, 255, 255, 0.9); min-width: 60px; flex-shrink: 0; }
+.playlist-container .setting-group input { flex: 1; text-align: left; padding: 0.6rem 1rem; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: white; font-size: 0.95rem; transition: all 0.3s ease; }
+.playlist-container .setting-group input:focus { outline: none; border-color: rgba(41, 128, 185, 0.6); background: rgba(255, 255, 255, 0.12); }
+.playlist-container .setting-group input::placeholder { color: rgba(255, 255, 255, 0.4); }
 .playlist-settings .setting-group input { width: 140px; text-align: left; padding: 0.3rem 0.5rem; }
-.platform-select { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 0.3rem 0.5rem; color: white; width: 100px; cursor: pointer; }
+.platform-select { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 0.6rem 1rem; color: white; flex: 1; cursor: pointer; }
+.playlist-container .platform-select { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; }
+.playlist-container .platform-select:focus { outline: none; border-color: rgba(41, 128, 185, 0.6); background: rgba(255, 255, 255, 0.12); }
 .platform-select option { background: #333; color: white; }
-.playlist-actions { display: flex; gap: 0.5rem; margin-top: 0.8rem; justify-content: center; }
+.playlist-actions { display: flex; gap: 0.8rem; margin-top: 1.5rem; justify-content: center; flex-wrap: wrap; }
+.playlist-container .action-btn { padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; }
+.playlist-container .help-link { margin-top: 1.5rem; font-size: 0.85rem; padding: 0.6rem 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); transition: all 0.3s ease; }
+.playlist-container .help-link:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
 .action-btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.1); color: white; font-size: 0.75rem; cursor: pointer; transition: all 0.3s ease; }
 .action-btn:hover { background: rgba(255, 255, 255, 0.2); }
 .apply-btn { background: rgba(76, 175, 80, 0.3); border-color: rgba(76, 175, 80, 0.5); }
@@ -324,8 +375,22 @@ onUnmounted(() => { if (timer) clearInterval(timer); if (timeInterval) clearInte
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 
 .about-container { color: white; padding: 2rem 0; text-align: center; }
+.about-content { margin-bottom: 2rem; text-align: left; max-width: 500px; margin: 0 auto 2rem; }
+.about-content p { margin-bottom: 1rem; font-size: 0.9rem; line-height: 1.5; opacity: 0.9; }
 .about-links { display: flex; flex-direction: column; gap: 1rem; align-items: center; }
 .about-link { display: flex; align-items: center; gap: 0.8rem; padding: 1rem 2rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; color: white; text-decoration: none; transition: all 0.3s ease; width: 200px; justify-content: center; }
 .about-link:hover { background: rgba(255, 255, 255, 0.15); transform: translateY(-2px); }
 .about-link .icon { width: 24px; height: 24px; }
+
+.updates-container { color: white; padding: 1rem 0; }
+.updates-list { max-width: 600px; margin: 0 auto; }
+.update-item { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 1.5rem; margin-bottom: 1rem; }
+.update-date { font-size: 0.85rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 0.8rem; font-weight: 500; }
+.update-content p { margin-bottom: 0.5rem; font-size: 0.9rem; line-height: 1.5; opacity: 0.9; }
+
+.quickstudy-container { color: white; padding: 2rem 0; text-align: center; }
+.quickstudy-content { max-width: 400px; margin: 0 auto; }
+.quickstudy-content p { margin-bottom: 1.5rem; font-size: 0.9rem; opacity: 0.9; }
+.quickstudy-link { display: inline-block; padding: 1rem 2rem; background: rgba(76, 175, 80, 0.3); border: 1px solid rgba(76, 175, 80, 0.5); border-radius: 10px; color: white; text-decoration: none; font-size: 1rem; font-weight: 500; transition: all 0.3s ease; }
+.quickstudy-link:hover { background: rgba(76, 175, 80, 0.5); transform: translateY(-2px); }
 </style>

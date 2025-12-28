@@ -1,37 +1,18 @@
 import { ref } from 'vue'
 import { fetchPlaylist, getStoredConfig, saveConfig, DEFAULT_PLAYLIST_ID } from '../services/meting.js'
-import { getAllSongs } from '../data/songs.js'
-
-const MUSIC_SOURCE = {
-  LOCAL: 'local',
-  METING: 'meting'
-}
 
 const songs = ref([])
 const loading = ref(false)
-const currentSource = ref(localStorage.getItem('music_source') || MUSIC_SOURCE.METING)
 const metingConfig = ref(getStoredConfig())
 const playlistId = ref(localStorage.getItem('playlist_id') || DEFAULT_PLAYLIST_ID)
 const platform = ref(localStorage.getItem('music_platform') || 'netease')
 
 const PLATFORMS = [
   { value: 'netease', label: '网易云' },
-  { value: 'tencent', label: 'QQ音乐' },
-  { value: 'kugou', label: '酷狗' },
-  { value: 'kuwo', label: '酷我' }
+  { value: 'tencent', label: 'QQ音乐' }
 ]
 
 export const useMusic = () => {
-
-  const loadLocalSongs = () => {
-    const allSongs = getAllSongs()
-    songs.value = allSongs.map(song => ({
-      name: song.title,
-      artist: song.artist,
-      url: song.src,
-      cover: song.album && song.album.includes('SEKAI') ? '/4.webp' : '/123.webp'
-    }))
-  }
 
   const loadMetingSongs = async (platform, id) => {
     loading.value = true
@@ -50,22 +31,10 @@ export const useMusic = () => {
   }
 
   const loadSongs = async () => {
-    if (currentSource.value === MUSIC_SOURCE.METING) {
-      await loadMetingSongs(metingConfig.value.platform, playlistId.value)
-    } else {
-      loadLocalSongs()
-    }
-  }
-
-  const switchSource = async (source) => {
-    currentSource.value = source
-    localStorage.setItem('music_source', source)
-    await loadSongs()
+    await loadMetingSongs(metingConfig.value.platform, playlistId.value)
   }
 
   const updateMetingPlaylist = async (platform, id) => {
-    currentSource.value = MUSIC_SOURCE.METING
-    localStorage.setItem('music_source', MUSIC_SOURCE.METING)
     await loadMetingSongs(platform, id)
   }
 
@@ -87,14 +56,10 @@ export const useMusic = () => {
   const applyCustomPlaylist = async (p, id) => {
     setPlatform(p)
     setPlaylistId(id)
-    currentSource.value = MUSIC_SOURCE.METING
-    localStorage.setItem('music_source', MUSIC_SOURCE.METING)
     await loadMetingSongs(p, id)
   }
 
   const resetToLocal = async () => {
-    currentSource.value = MUSIC_SOURCE.METING
-    localStorage.setItem('music_source', MUSIC_SOURCE.METING)
     setPlatform('netease')
     resetPlaylistId()
     await loadMetingSongs('netease', DEFAULT_PLAYLIST_ID)
@@ -103,12 +68,10 @@ export const useMusic = () => {
   return {
     songs,
     loading,
-    currentSource,
     metingConfig,
     playlistId,
     platform,
     loadSongs,
-    switchSource,
     updateMetingPlaylist,
     setPlaylistId,
     resetPlaylistId,
@@ -116,7 +79,6 @@ export const useMusic = () => {
     applyCustomPlaylist,
     resetToLocal,
     DEFAULT_PLAYLIST_ID,
-    PLATFORMS,
-    MUSIC_SOURCE
+    PLATFORMS
   }
 }
