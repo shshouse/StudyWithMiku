@@ -395,6 +395,7 @@ onUnmounted(() => {
 /* 窄屏适配 */
 @media (max-width: 490px) {
   .fullscreen-btn {
+    position: fixed;
     top: auto;
     bottom: 73px;
     left: 20px;
@@ -403,6 +404,7 @@ onUnmounted(() => {
   }
 
   .switch-video-btn {
+    position: fixed;
     top: auto;
     bottom: 116px;
     left: 20px;
