@@ -13,7 +13,6 @@ const PLATFORMS = [
 ]
 
 export const useMusic = () => {
-
   const loadMetingSongs = async (platform, id) => {
     loading.value = true
     try {
@@ -59,7 +58,7 @@ export const useMusic = () => {
     await loadMetingSongs(p, id)
   }
 
-  const resetToLocal = async () => {
+  const resetToDefault = async () => {
     setPlatform('netease')
     resetPlaylistId()
     await loadMetingSongs('netease', DEFAULT_PLAYLIST_ID)
@@ -77,7 +76,7 @@ export const useMusic = () => {
     resetPlaylistId,
     setPlatform,
     applyCustomPlaylist,
-    resetToLocal,
+    resetToDefault,
     DEFAULT_PLAYLIST_ID,
     PLATFORMS
   }
