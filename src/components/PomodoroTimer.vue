@@ -107,27 +107,9 @@
                 <div class="stat-item"><span class="stat-label">今日学习</span><span class="stat-value">{{ formatStudyTime(studyStats.todayStudyTime) }}</span></div>
                 <div class="stat-item"><span class="stat-label">今日番茄</span><span class="stat-value">{{ studyStats.todayPomodoros }}</span></div>
               </div>
-              <div v-else-if="currentTab === 'updates'" class="updates-container">
-                <div class="updates-list">
-                  <div class="update-item">
-                    <div class="update-date">2025-12-27</div>
-                    <div class="update-content">
-                      <p>学习辛苦了！也请注意一下休息哦~</p>
-                      <p>1.对默认歌单添加了翻译，找歌更方便~</p>
-                      <p>2.修复手机端的ui显示不全问题</p>
-                      <p>3.修复手机端的"全屏""切换"按钮显示问题</p>
-                    </div>
-                  </div>
-                  <div class="update-item">
-                    <div class="update-date">2025-12-19</div>
-                    <div class="update-content">
-                      <p>网站即将满月，感谢大家的使用!</p>
-                      <p>1.账号系统制作中，以后可以登录MikuMod账号，记录学习时长等</p>
-                      <p>2.学习时长记录推出！可以记录学习了多久以及完成的番茄数~</p>
-                      <p>3.桌面壁纸应用即将推出~</p>
-                    </div>
-                  </div>
-                </div>
+
+              <div v-else-if="currentTab === 'updates'">
+                <Updates />
               </div>
 
               <div v-else-if="currentTab === 'quickstudy'" class="quickstudy-container">
@@ -143,6 +125,19 @@
                   <p>2.项目代码在github开源，欢迎点上star！</p>
                   <p>3.项目部署域名：study.mikugame.icu和study.mikumod.com</p>
                   <p>4.希望你可以喜欢！在悠闲的音乐里和初音一起学习吧~</p>
+                </div>
+                <div class="runtime-display">
+                  <div class="runtime-label">网站已运行</div>
+                  <div class="runtime-time">
+                    <span class="runtime-value">{{ runtimeDays }}</span>
+                    <span class="runtime-unit">天</span>
+                    <span class="runtime-value">{{ runtimeHours }}</span>
+                    <span class="runtime-unit">时</span>
+                    <span class="runtime-value">{{ runtimeMinutes }}</span>
+                    <span class="runtime-unit">分</span>
+                    <span class="runtime-value">{{ runtimeSeconds }}</span>
+                    <span class="runtime-unit">秒</span>
+                  </div>
                 </div>
                 <div class="about-links">
                   <a href="https://github.com/shshouse/StudyWithMiku" target="_blank" rel="noopener noreferrer" class="about-link">
@@ -169,9 +164,9 @@ import { useOnlineCount } from '../composables/useOnlineCount.js'
 import { useMusic } from '../composables/useMusic.js'
 import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
 import { getPomodoroSettings, savePomodoroSettings } from '../utils/userSettings.js'
+import Updates from './Updates.vue'
 
-const WS_URL = 'wss://online.study.mikugame.icu/ws'
-const { onlineCount, isConnected } = useOnlineCount(WS_URL)
+const { onlineCount, isConnected } = useOnlineCount(import.meta.env.VITE_SSE_URL)
 const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS } = useMusic()
 
 const inputPlaylistId = ref('')
@@ -214,6 +209,11 @@ const completedPomodoros = ref(0)
 const showSettings = ref(false)
 const currentTime = ref(new Date())
 const systemTime = computed(() => `${currentTime.value.getHours().toString().padStart(2, '0')}:${currentTime.value.getMinutes().toString().padStart(2, '0')}`)
+const startDate = new Date('2025-12-02T00:00:00')
+const runtimeDays = computed(() => Math.floor((currentTime.value - startDate) / (1000 * 60 * 60 * 24)))
+const runtimeHours = computed(() => Math.floor((currentTime.value - startDate) % (1000 * 60 * 60 * 24) / (1000 * 60 * 60)))
+const runtimeMinutes = computed(() => Math.floor((currentTime.value - startDate) % (1000 * 60 * 60) / (1000 * 60)))
+const runtimeSeconds = computed(() => Math.floor((currentTime.value - startDate) % (1000 * 60) / 1000))
 let timeInterval = null
 let timer = null
 let studyTimeCounter = 0
@@ -307,6 +307,24 @@ onUnmounted(() => { if (timer) clearInterval(timer); if (timeInterval) clearInte
 .nav-item.active { color: white; background: rgba(255, 255, 255, 0.1); border-left: 2px solid #ff6b6b; }
 .settings-content { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; min-height: 0; }
 
+.settings-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.settings-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.settings-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.settings-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 .timer-container { text-align: center; color: white; }
 .status-indicator { margin-bottom: 1rem; }
 .status-text { font-size: 1rem; font-weight: 500; padding: 0.4rem 0.8rem; border-radius: 20px; background: rgba(255, 255, 255, 0.1); }
@@ -377,16 +395,15 @@ onUnmounted(() => { if (timer) clearInterval(timer); if (timeInterval) clearInte
 .about-container { color: white; padding: 2rem 0; text-align: center; }
 .about-content { margin-bottom: 2rem; text-align: left; max-width: 500px; margin: 0 auto 2rem; }
 .about-content p { margin-bottom: 1rem; font-size: 0.9rem; line-height: 1.5; opacity: 0.9; }
+.runtime-display { margin-bottom: 2rem; padding: 1.5rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; }
+.runtime-label { font-size: 0.9rem; opacity: 0.8; margin-bottom: 0.8rem; }
+.runtime-time { display: flex; justify-content: center; align-items: baseline; gap: 0.3rem; font-family: 'Courier New', monospace; }
+.runtime-value { font-size: 1.5rem; font-weight: 600; color: #4ecdc4; }
+.runtime-unit { font-size: 0.9rem; opacity: 0.7; }
 .about-links { display: flex; flex-direction: column; gap: 1rem; align-items: center; }
 .about-link { display: flex; align-items: center; gap: 0.8rem; padding: 1rem 2rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; color: white; text-decoration: none; transition: all 0.3s ease; width: 200px; justify-content: center; }
 .about-link:hover { background: rgba(255, 255, 255, 0.15); transform: translateY(-2px); }
 .about-link .icon { width: 24px; height: 24px; }
-
-.updates-container { color: white; padding: 1rem 0; }
-.updates-list { max-width: 600px; margin: 0 auto; }
-.update-item { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 1.5rem; margin-bottom: 1rem; }
-.update-date { font-size: 0.85rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 0.8rem; font-weight: 500; }
-.update-content p { margin-bottom: 0.5rem; font-size: 0.9rem; line-height: 1.5; opacity: 0.9; }
 
 .quickstudy-container { color: white; padding: 2rem 0; text-align: center; }
 .quickstudy-content { max-width: 400px; margin: 0 auto; }
