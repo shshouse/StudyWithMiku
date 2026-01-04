@@ -3,7 +3,9 @@ const STORAGE_KEY = 'study_with_miku_settings'
 const defaultSettings = {
   pomodoro: {
     focusDuration: 25,
-    breakDuration: 5
+    breakDuration: 5,
+    pauseMusicOnFocusEnd: false,
+    pauseMusicOnBreakEnd: false
   },
   video: {
     currentIndex: 0
@@ -35,14 +37,21 @@ export const saveSettings = (settings) => {
   }
 }
 
-export const savePomodoroSettings = (focusDuration, breakDuration) => {
+export const savePomodoroSettings = (focusDuration, breakDuration, pauseMusicOnFocusEnd, pauseMusicOnBreakEnd) => {
   const settings = getSettings()
-  settings.pomodoro = { focusDuration, breakDuration }
+  settings.pomodoro = { focusDuration, breakDuration, pauseMusicOnFocusEnd, pauseMusicOnBreakEnd }
   saveSettings(settings)
 }
 
 export const getPomodoroSettings = () => {
   return getSettings().pomodoro
+}
+
+export const saveMusicPauseSettings = (pauseMusicOnFocusEnd, pauseMusicOnBreakEnd) => {
+  const settings = getSettings()
+  settings.pomodoro.pauseMusicOnFocusEnd = pauseMusicOnFocusEnd
+  settings.pomodoro.pauseMusicOnBreakEnd = pauseMusicOnBreakEnd
+  saveSettings(settings)
 }
 
 export const saveVideoIndex = (index) => {

@@ -69,6 +69,20 @@
                     <label>休息时间(分钟)</label>
                     <input type="number" v-model.number="breakDuration" min="1" max="30" :disabled="isRunning"/>
                   </div>
+                  <div class="setting-group">
+                    <label>专注结束时暂停音乐</label>
+                    <label class="toggle-switch">
+                      <input type="checkbox" v-model="pauseMusicOnFocusEnd" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd)"/>
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div class="setting-group">
+                    <label>休息结束时暂停音乐</label>
+                    <label class="toggle-switch">
+                      <input type="checkbox" v-model="pauseMusicOnBreakEnd" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd)"/>
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
                 </div>
                 <div class="pomodoro-count">
                   <span class="count-label">已完成番茄:</span>
@@ -163,7 +177,7 @@ import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { useOnlineCount } from '../composables/useOnlineCount.js'
 import { useMusic } from '../composables/useMusic.js'
 import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
-import { getPomodoroSettings, savePomodoroSettings } from '../utils/userSettings.js'
+import { getPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings } from '../utils/userSettings.js'
 import Updates from './Updates.vue'
 
 const { onlineCount, isConnected } = useOnlineCount(import.meta.env.VITE_WS_URL)
@@ -202,6 +216,8 @@ const STATUS = { FOCUS: 'focus', BREAK: 'break', LONG_BREAK: 'longBreak' }
 const savedPomodoro = getPomodoroSettings()
 const focusDuration = ref(savedPomodoro.focusDuration)
 const breakDuration = ref(savedPomodoro.breakDuration)
+const pauseMusicOnFocusEnd = ref(savedPomodoro.pauseMusicOnFocusEnd || false)
+const pauseMusicOnBreakEnd = ref(savedPomodoro.pauseMusicOnBreakEnd || false)
 const timeLeft = ref(focusDuration.value * 60)
 const isRunning = ref(false)
 const currentStatus = ref(STATUS.FOCUS)
@@ -256,13 +272,26 @@ const pauseTimer = () => {
 const resetTimer = () => { pauseTimer(); timeLeft.value = focusDuration.value * 60; currentStatus.value = STATUS.FOCUS }
 const handleTimerComplete = () => {
   playNotificationSound()
+  const completedStatus = currentStatus.value
   if (currentStatus.value === STATUS.FOCUS) {
     completedPomodoros.value++
     addPomodoro()
     if (completedPomodoros.value % 4 === 0) { currentStatus.value = STATUS.LONG_BREAK; timeLeft.value = breakDuration.value * 60 * 2 }
     else { currentStatus.value = STATUS.BREAK; timeLeft.value = breakDuration.value * 60 }
-  } else { currentStatus.value = STATUS.FOCUS; timeLeft.value = focusDuration.value * 60 }
-  showNotification()
+    if (pauseMusicOnFocusEnd.value) {
+      const ap = getAPlayerInstance()
+      if (ap) ap.pause()
+    }
+  } else {
+    currentStatus.value = STATUS.FOCUS
+    timeLeft.value = focusDuration.value * 60
+    if (pauseMusicOnBreakEnd.value) {
+      const ap = getAPlayerInstance()
+      if (ap) ap.pause()
+    }
+  }
+  const statusTextMap = { [STATUS.FOCUS]: '专注', [STATUS.BREAK]: '休息', [STATUS.LONG_BREAK]: '长休' }
+  if (Notification.permission === 'granted') new Notification('番茄钟', { body: `${statusTextMap[completedStatus]}已完成！`, icon: '/favicon.ico' })
   setTimeout(() => { startTimer() }, 1000)
 }
 const playNotificationSound = async () => { duckMusicForNotification(3000); await new Promise(r => setTimeout(r, 200)); new Audio('/BreakOrWork.mp3').play() }
@@ -349,9 +378,17 @@ onUnmounted(() => { if (timer) clearInterval(timer); if (timeInterval) clearInte
 .timer-settings { margin-bottom: 1rem; }
 .setting-group { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; font-size: 0.8rem; }
 .setting-group label { opacity: 0.8; }
-.setting-group input { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 0.2rem 0.4rem; color: white; width: 50px; text-align: center; }
-.setting-group input:focus { outline: none; border-color: rgba(255, 255, 255, 0.6); }
-.setting-group input:disabled { opacity: 0.5; }
+.setting-group input[type="number"] { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 0.2rem 0.4rem; color: white; width: 50px; text-align: center; }
+.setting-group input[type="number"]:focus { outline: none; border-color: rgba(255, 255, 255, 0.6); }
+.setting-group input[type="number"]:disabled { opacity: 0.5; }
+.toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; margin: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 24px; transition: all 0.3s ease; }
+.toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 2.5px; background: rgba(255, 255, 255, 0.8); border-radius: 50%; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); }
+.toggle-switch input:checked + .toggle-slider { background: rgba(255, 107, 107, 0.3); border-color: rgba(255, 107, 107, 0.5); }
+.toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); background: #ff6b6b; }
+.toggle-switch:hover .toggle-slider { background: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.4); }
+.toggle-switch input:checked:hover + .toggle-slider { background: rgba(255, 107, 107, 0.4); border-color: rgba(255, 107, 107, 0.6); }
 .pomodoro-count { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; opacity: 0.8; }
 .count-display { display: flex; gap: 0.2rem; }
 .pomodoro-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); transition: background 0.3s ease; }
