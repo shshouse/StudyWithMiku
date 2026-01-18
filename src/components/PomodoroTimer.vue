@@ -9,28 +9,37 @@
       @touchstart="onUITouchStart"
       @touchend="onUITouchEnd"
     >
-      <div class="online-indicator">
-        <span class="online-dot" :class="{ connected: isConnected }"></span>
-        <span class="online-text">{{ onlineCount }}</span>
+      <div class="clock-row">
+        <div class="online-indicator">
+          <span class="online-dot" :class="{ connected: isConnected }"></span>
+          <span class="online-text">{{ onlineCount }}</span>
+        </div>
+        <div class="clock-display">
+          <span class="minutes">{{ formattedMinutes }}</span>
+          <span class="separator">:</span>
+          <span class="seconds">{{ formattedSeconds }}</span>
+        </div>
+        <div class="status-badge" :class="statusClass">{{ statusText }}</div>
+        <div class="system-time">{{ systemTime }}</div>
       </div>
-      <div class="clock-display">
-        <span class="minutes">{{ formattedMinutes }}</span>
-        <span class="separator">:</span>
-        <span class="seconds">{{ formattedSeconds }}</span>
-      </div>
-      <div class="status-badge" :class="statusClass">{{ statusText }}</div>
-      <div class="system-time">{{ systemTime }}</div>
+      <transition name="slide-fade">
+        <div v-if="currentTodo" class="current-todo">
+          <span class="todo-label">当前任务:</span>
+          <span class="todo-content">{{ currentTodo.text }}</span>
+        </div>
+      </transition>
     </div>
     <transition name="fade">
       <div v-if="showSettings" class="settings-overlay" @click.self="closeSettings" @mouseenter="onUIMouseEnter" @mouseleave="onUIMouseLeave" @touchstart="onUITouchStart" @touchend="onUITouchEnd">
         <div class="settings-panel">
           <div class="settings-header">
-            <h3>{{ currentTabTitle }}</h3>
+            <h3>设置</h3>
             <button class="close-btn" @click="closeSettings">×</button>
           </div>
           <div class="settings-body">
             <div class="settings-nav">
               <button class="nav-item" :class="{ active: currentTab === 'pomodoro' }" @click="currentTab = 'pomodoro'">番茄钟</button>
+              <button class="nav-item" :class="{ active: currentTab === 'todos' }" @click="currentTab = 'todos'">待办列表</button>
               <button class="nav-item" :class="{ active: currentTab === 'playlist' }" @click="currentTab = 'playlist'">歌单</button>
               <button class="nav-item" :class="{ active: currentTab === 'stats' }" @click="currentTab = 'stats'">学习数据</button>
               <button class="nav-item" :class="{ active: currentTab === 'updates' }" @click="currentTab = 'updates'">更新日志</button>
@@ -38,7 +47,35 @@
               <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="currentTab = 'about'">关于</button>
             </div>
             <div class="settings-content">
-              <div v-if="currentTab === 'pomodoro'" class="timer-container">
+              <transition name="tab-fade" mode="out-in">
+                <div v-if="currentTab === 'todos'" key="todos" class="todos-container">
+                  <div class="todo-input-group">
+                    <input type="text" v-model="newTodoText" @keyup.enter="addTodo" placeholder="添加待办事项..." class="todo-input"/>
+                    <button @click="addTodo" class="action-btn add-todo-btn">添加</button>
+                  </div>
+                  <div class="todo-display-control">
+                    <label class="toggle-switch">
+                      <input type="checkbox" v-model="showTodoOnClock" @change="saveShowTodoOnClock"/>
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <span class="control-label">在番茄钟上显示当前任务</span>
+                  </div>
+                  <transition-group name="todo-list" tag="div" class="todo-list">
+                    <div v-for="todo in todos" :key="todo.id" class="todo-item" :class="{ completed: todo.completed, pinned: todo.pinned }">
+                      <input type="checkbox" :checked="todo.completed" @change="toggleTodo(todo.id)" class="todo-checkbox"/>
+                      <span class="todo-text">{{ todo.text }}</span>
+                      <button @click="togglePin(todo.id)" class="pin-todo-btn" :class="{ active: todo.pinned }" :title="todo.pinned ? '取消外显' : '设为外显'">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z"/>
+                        </svg>
+                      </button>
+                      <button @click="deleteTodo(todo.id)" class="delete-todo-btn">×</button>
+                    </div>
+                  </transition-group>
+                  <div v-if="todos.length === 0" class="empty-todos">暂无待办事项</div>
+                </div>
+
+                <div v-else-if="currentTab === 'pomodoro'" key="pomodoro" class="timer-container">
                 <div class="status-indicator">
                   <span class="status-text" :class="statusClass">{{ statusText }}</span>
                 </div>
@@ -113,9 +150,31 @@
                 <div class="playlist-actions">
                   <button class="action-btn apply-btn" @click="applyPlaylist">获取</button>
                   <button class="action-btn reset-playlist-btn" @click="resetPlaylist">恢复默认</button>
-                  <button class="action-btn jazz-btn" @click="applyJazzPlaylist">站长神秘歌单</button>
+                  <a class="action-btn help-btn" href="https://www.bilibili.com/opus/1144256090307821590" target="_blank">歌单ID怎么获取?</a>
                 </div>
-                <a class="help-link" href="https://www.bilibili.com/opus/1144256090307821590" target="_blank">歌单ID怎么获取?</a>
+                <div class="playlist-recommend">
+                  <div class="recommend-title">推荐歌单</div>
+                  <div class="recommend-list">
+                    <div v-for="item in recommendPlaylists" :key="item.id" class="recommend-item">
+                      <div class="recommend-header" @click="applyRecommendPlaylist(item)">
+                        <span class="recommend-name">{{ item.name }}</span>
+                        <span class="recommend-desc">{{ item.desc }}</span>
+                      </div>
+                      <div class="recommend-meta">
+                        <div class="recommend-tags">
+                          <span v-for="tag in item.tags" :key="tag" class="tag-badge" :class="getTagClass(tag)">{{ tag }}</span>
+                        </div>
+                        <span class="recommend-platform">{{ PLATFORMS.find(p => p.value === item.platform)?.label }}</span>
+                        <span class="recommend-id" @click="copyPlaylistId(item.playlistId)" title="点击复制">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                          </svg>
+                          ID: {{ item.playlistId }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div v-else-if="currentTab === 'stats'" class="stats-container">
@@ -171,6 +230,7 @@
                   </a>
                 </div>
               </div>
+              </transition>
             </div>
           </div>
         </div>
@@ -185,6 +245,7 @@ import { useOnlineCount } from '../composables/useOnlineCount.js'
 import { useMusic } from '../composables/useMusic.js'
 import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
 import { getPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings } from '../utils/userSettings.js'
+import { recommendPlaylists } from '../data/playlists.js'
 import Updates from './Updates.vue'
 
 const props = defineProps({
@@ -200,7 +261,65 @@ const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_
 const inputPlaylistId = ref('')
 const selectedPlatform = ref(platform.value)
 const currentTab = ref('pomodoro')
-const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', playlist: '歌单设置', stats: '学习数据', updates: '更新日志', quickstudy: '一键学习', about: '关于' }[currentTab.value]))
+const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', todos: '待办列表', playlist: '歌单设置', stats: '学习数据', updates: '更新日志', quickstudy: '一键学习', about: '关于' }[currentTab.value]))
+
+const TODOS_KEY = 'study_todos'
+const SHOW_TODO_KEY = 'show_todo_on_clock'
+const loadTodos = () => {
+  try {
+    const saved = localStorage.getItem(TODOS_KEY)
+    return saved ? JSON.parse(saved) : []
+  } catch {
+    return []
+  }
+}
+const loadShowTodoOnClock = () => {
+  try {
+    const saved = localStorage.getItem(SHOW_TODO_KEY)
+    return saved === null ? true : saved === 'true'
+  } catch {
+    return true
+  }
+}
+const todos = ref(loadTodos())
+const newTodoText = ref('')
+const showTodoOnClock = ref(loadShowTodoOnClock())
+const currentTodo = computed(() => {
+  if (!showTodoOnClock.value) return null
+  const pinned = todos.value.find(t => !t.completed && t.pinned)
+  if (pinned) return pinned
+  const uncompletedTodos = todos.value.filter(t => !t.completed)
+  return uncompletedTodos[uncompletedTodos.length - 1]
+})
+const saveTodos = () => localStorage.setItem(TODOS_KEY, JSON.stringify(todos.value))
+const saveShowTodoOnClock = () => localStorage.setItem(SHOW_TODO_KEY, showTodoOnClock.value.toString())
+const addTodo = () => {
+  if (!newTodoText.value.trim()) return
+  todos.value.unshift({ id: Date.now(), text: newTodoText.value.trim(), completed: false, pinned: false })
+  newTodoText.value = ''
+  saveTodos()
+}
+const toggleTodo = (id) => {
+  const todo = todos.value.find(t => t.id === id)
+  if (todo) {
+    todo.completed = !todo.completed
+    saveTodos()
+  }
+}
+const togglePin = (id) => {
+  todos.value.forEach(t => {
+    if (t.id === id) {
+      t.pinned = !t.pinned
+    } else {
+      t.pinned = false
+    }
+  })
+  saveTodos()
+}
+const deleteTodo = (id) => {
+  todos.value = todos.value.filter(t => t.id !== id)
+  saveTodos()
+}
 
 const STATS_KEY = 'study_stats'
 const getToday = () => new Date().toDateString()
@@ -224,7 +343,13 @@ const formatStudyTime = (seconds) => { const h = Math.floor(seconds / 3600); con
 
 const applyPlaylist = async () => { if (!inputPlaylistId.value) return; await applyCustomPlaylist(selectedPlatform.value, inputPlaylistId.value); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
 const resetPlaylist = async () => { inputPlaylistId.value = ''; await resetToLocal(); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
-const applyJazzPlaylist = async () => { await applyCustomPlaylist('netease', '8894040639'); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
+const applyRecommendPlaylist = async (item) => { await applyCustomPlaylist(item.platform, item.playlistId); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
+const copyPlaylistId = async (id) => { try { await navigator.clipboard.writeText(id) } catch { const input = document.createElement('input'); input.value = id; document.body.appendChild(input); input.select(); document.execCommand('copy'); document.body.removeChild(input) } }
+const getTagClass = (tag) => {
+  if (tag === '适合学习') return 'tag-study'
+  if (tag === '不适合学习') return 'tag-not-study'
+  return ''
+}
 
 const STATUS = { FOCUS: 'focus', BREAK: 'break', LONG_BREAK: 'longBreak' }
 const savedPomodoro = getPomodoroSettings()
@@ -338,8 +463,20 @@ onUnmounted(() => {
   position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1001; cursor: pointer;
   transition: all 0.3s ease; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px);
   border-radius: 10px; padding: 0.8rem 1.2rem; border: 1px solid rgba(255, 255, 255, 0.2);
-  display: flex; align-items: center; gap: 1rem; color: white; font-family: 'Courier New', monospace;
+  display: flex; flex-direction: column; align-items: center; gap: 0.6rem; color: white; font-family: 'Courier New', monospace;
 }
+.clock-row {
+  display: flex; align-items: center; gap: 1rem;
+}
+.current-todo {
+  display: flex; align-items: center; gap: 0.5rem; padding-top: 0.6rem; border-top: 1px solid rgba(255, 255, 255, 0.1); font-size: 0.85rem; width: 100%;
+}
+.todo-label { opacity: 0.7; white-space: nowrap; }
+.todo-content { opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.slide-fade-enter-active { transition: all 0.3s ease; }
+.slide-fade-leave-active { transition: all 0.3s ease; }
+.slide-fade-enter-from { transform: translateY(-10px); opacity: 0; }
+.slide-fade-leave-to { transform: translateY(-10px); opacity: 0; }
 .countdown-clock.hidden {
   opacity: 0;
   pointer-events: none;
@@ -359,6 +496,10 @@ onUnmounted(() => {
 .status-badge.long-break { color: #45b7d1; }
 .settings-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1002; }
 .settings-panel { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(30px); border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.2); width: 90%; max-width: 550px; height: 70vh; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; }
+
+@media (max-width: 768px) {
+  .settings-panel { width: 95%; max-width: none; height: 85vh; border-radius: 15px; }
+}
 .settings-header { display: flex; justify-content: space-between; align-items: center; padding: 1.2rem 1.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); flex-shrink: 0; }
 .settings-header h3 { color: white; margin: 0; font-size: 1.1rem; }
 .close-btn { background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.2rem; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; transition: background 0.3s ease; flex-shrink: 0; }
@@ -368,6 +509,13 @@ onUnmounted(() => {
 .nav-item { background: none; border: none; color: rgba(255, 255, 255, 0.6); padding: 0.8rem 1.2rem; text-align: left; cursor: pointer; transition: all 0.3s ease; font-size: 0.85rem; white-space: nowrap; }
 .nav-item:hover { color: white; background: rgba(255, 255, 255, 0.05); }
 .nav-item.active { color: white; background: rgba(255, 255, 255, 0.1); border-left: 2px solid #ff6b6b; }
+
+@media (max-width: 768px) {
+  .settings-body { flex-direction: column; }
+  .settings-nav { flex-direction: row; border-right: none; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 0.5rem; min-width: auto; overflow-x: auto; overflow-y: hidden; }
+  .nav-item { padding: 0.6rem 1rem; font-size: 0.8rem; }
+  .nav-item.active { border-left: none; border-bottom: 2px solid #ff6b6b; }
+}
 .settings-content { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; min-height: 0; }
 
 .settings-content::-webkit-scrollbar {
@@ -432,6 +580,12 @@ onUnmounted(() => {
 .playlist-container .setting-group { margin-bottom: 1.5rem; width: 100%; max-width: 400px; display: flex; align-items: center; gap: 1rem; }
 .playlist-container .setting-group label { display: inline-block; margin-bottom: 0; font-size: 0.95rem; color: rgba(255, 255, 255, 0.9); min-width: 60px; flex-shrink: 0; }
 .playlist-container .setting-group input { flex: 1; text-align: left; padding: 0.6rem 1rem; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: white; font-size: 0.95rem; transition: all 0.3s ease; }
+
+@media (max-width: 768px) {
+  .playlist-container { padding: 1rem 0; }
+  .playlist-container .setting-group { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+  .playlist-container .setting-group label { min-width: auto; }
+}
 .playlist-container .setting-group input:focus { outline: none; border-color: rgba(41, 128, 185, 0.6); background: rgba(255, 255, 255, 0.12); }
 .playlist-container .setting-group input::placeholder { color: rgba(255, 255, 255, 0.4); }
 .playlist-settings .setting-group input { width: 140px; text-align: left; padding: 0.3rem 0.5rem; }
@@ -441,14 +595,39 @@ onUnmounted(() => {
 .platform-select option { background: #333; color: white; }
 .playlist-actions { display: flex; gap: 0.8rem; margin-top: 1.5rem; justify-content: center; flex-wrap: wrap; }
 .playlist-container .action-btn { padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; }
+
+@media (max-width: 768px) {
+  .playlist-actions { gap: 0.5rem; }
+  .playlist-container .action-btn { flex: 1; min-width: 0; padding: 0.6rem 0.5rem; font-size: 0.75rem; }
+}
 .playlist-container .help-link { margin-top: 1.5rem; font-size: 0.85rem; padding: 0.6rem 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); transition: all 0.3s ease; }
 .playlist-container .help-link:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
 .action-btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.1); color: white; font-size: 0.75rem; cursor: pointer; transition: all 0.3s ease; }
 .action-btn:hover { background: rgba(255, 255, 255, 0.2); }
 .apply-btn { background: rgba(76, 175, 80, 0.3); border-color: rgba(76, 175, 80, 0.5); }
 .reset-playlist-btn { background: rgba(255, 152, 0, 0.3); border-color: rgba(255, 152, 0, 0.5); }
-.help-link { display: block; margin-top: 0.8rem; font-size: 0.7rem; color: rgba(255, 255, 255, 0.6); text-decoration: none; text-align: center; transition: color 0.3s ease; }
-.help-link:hover { color: rgba(255, 255, 255, 0.9); text-decoration: underline; }
+.help-btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+.playlist-recommend { margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255, 255, 255, 0.1); width: 100%; max-width: 400px; }
+.recommend-title { font-size: 0.9rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 1rem; text-align: left; }
+.recommend-list { display: flex; flex-direction: column; gap: 0.8rem; }
+.recommend-item { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 0.8rem 1rem; color: white; transition: all 0.3s ease; display: flex; flex-direction: column; gap: 0.5rem; text-align: left; }
+.recommend-header { cursor: pointer; display: flex; flex-direction: column; gap: 0.3rem; }
+.recommend-header:hover { opacity: 0.8; }
+.recommend-name { font-size: 0.9rem; font-weight: 500; }
+.recommend-desc { font-size: 0.75rem; color: rgba(255, 255, 255, 0.6); }
+.recommend-meta { display: flex; flex-wrap: wrap; gap: 0.8rem; font-size: 0.7rem; color: rgba(255, 255, 255, 0.5); padding-top: 0.3rem; border-top: 1px solid rgba(255, 255, 255, 0.05); align-items: center; }
+.recommend-tags { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.tag-badge { padding: 0.2rem 0.5rem; background: rgba(57, 197, 187, 0.2); border: 1px solid rgba(57, 197, 187, 0.3); border-radius: 10px; font-size: 0.65rem; color: rgba(255, 255, 255, 0.8); }
+.tag-badge.tag-study { background: rgba(76, 175, 80, 0.2); border-color: rgba(76, 175, 80, 0.4); color: rgba(144, 238, 144, 0.9); }
+.tag-badge.tag-not-study { background: rgba(244, 67, 54, 0.2); border-color: rgba(244, 67, 54, 0.4); color: rgba(255, 99, 71, 0.9); }
+.recommend-platform { opacity: 0.7; }
+.recommend-id { cursor: pointer; padding: 0.2rem 0.5rem; background: rgba(255, 255, 255, 0.05); border-radius: 4px; transition: all 0.2s ease; display: flex; align-items: center; gap: 0.3rem; }
+.recommend-id:hover { background: rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.9); }
+.recommend-id svg { flex-shrink: 0; }
+
+@media (max-width: 768px) {
+  .playlist-recommend { max-width: none; padding: 1rem; margin-top: 1.5rem; }
+}
 
 
 .stats-container { color: white; padding: 1rem 0; }
@@ -460,8 +639,54 @@ onUnmounted(() => {
 .stat-label { font-size: 0.9rem; opacity: 0.8; }
 .stat-value { font-size: 1.1rem; font-weight: 600; color: #ff6b6b; }
 .reset-stats-btn { margin-top: 1rem; width: 100%; background: rgba(244, 67, 54, 0.3); border-color: rgba(244, 67, 54, 0.5); }
+
+@media (max-width: 768px) {
+  .stat-item { padding: 0.8rem; }
+  .stat-label { font-size: 0.85rem; }
+  .stat-value { font-size: 1rem; }
+}
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.tab-fade-enter-active { transition: all 0.3s ease; }
+.tab-fade-leave-active { transition: all 0.2s ease; }
+.tab-fade-enter-from { opacity: 0; transform: translateX(10px); }
+.tab-fade-leave-to { opacity: 0; transform: translateX(-10px); }
+
+.todos-container { color: white; padding: 1rem 0; }
+.todo-input-group { display: flex; gap: 0.8rem; margin-bottom: 1.5rem; }
+.todo-display-control { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1.5rem; padding: 0.8rem 1rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; }
+.control-label { font-size: 0.9rem; color: rgba(255, 255, 255, 0.9); }
+.todo-input { flex: 1; padding: 0.6rem 1rem; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: white; font-size: 0.9rem; transition: all 0.3s ease; }
+
+@media (max-width: 768px) {
+  .todo-input-group { flex-direction: column; gap: 0.6rem; }
+  .add-todo-btn { width: 100%; }
+  .todo-display-control { flex-direction: column; align-items: flex-start; gap: 0.6rem; }
+}
+.todo-input:focus { outline: none; border-color: rgba(41, 128, 185, 0.6); background: rgba(255, 255, 255, 0.12); box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.1); }
+.todo-input::placeholder { color: rgba(255, 255, 255, 0.4); }
+.add-todo-btn { background: rgba(76, 175, 80, 0.3); border-color: rgba(76, 175, 80, 0.5); padding: 0.6rem 1.2rem; white-space: nowrap; }
+.add-todo-btn:hover { background: rgba(76, 175, 80, 0.5); transform: translateY(-1px); }
+.todo-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.todo-item { display: flex; align-items: center; gap: 0.8rem; padding: 0.8rem 1rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; transition: all 0.3s ease; }
+.todo-item:hover { background: rgba(255, 255, 255, 0.08); transform: translateX(4px); }
+.todo-item.completed { opacity: 0.6; }
+.todo-item.completed .todo-text { text-decoration: line-through; color: rgba(255, 255, 255, 0.5); }
+.todo-item.pinned { background: rgba(255, 193, 7, 0.1); border-color: rgba(255, 193, 7, 0.3); }
+.todo-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: #4ecdc4; border-radius: 4px; }
+.todo-text { flex: 1; font-size: 0.9rem; transition: all 0.3s ease; }
+.pin-todo-btn { background: rgba(255, 193, 7, 0.2); border: 1px solid rgba(255, 193, 7, 0.3); color: rgba(255, 193, 7, 0.7); width: 28px; height: 28px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; }
+.pin-todo-btn:hover { background: rgba(255, 193, 7, 0.3); color: rgba(255, 193, 7, 1); transform: scale(1.1); }
+.pin-todo-btn.active { background: rgba(255, 193, 7, 0.4); color: #ffc107; border-color: rgba(255, 193, 7, 0.6); }
+.delete-todo-btn { background: rgba(244, 67, 54, 0.3); border: 1px solid rgba(244, 67, 54, 0.5); color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; line-height: 1; }
+.delete-todo-btn:hover { background: rgba(244, 67, 54, 0.5); transform: scale(1.1); }
+.empty-todos { text-align: center; padding: 2rem; opacity: 0.5; font-size: 0.9rem; }
+.todo-list-enter-active { transition: all 0.3s ease; }
+.todo-list-leave-active { transition: all 0.3s ease; position: absolute; }
+.todo-list-enter-from { opacity: 0; transform: translateY(-10px); }
+.todo-list-leave-to { opacity: 0; transform: translateX(20px); }
+.todo-list-move { transition: transform 0.3s ease; }
 
 .about-container { color: white; padding: 2rem 0; text-align: center; }
 .about-content { margin-bottom: 2rem; text-align: left; max-width: 500px; margin: 0 auto 2rem; }
@@ -475,6 +700,15 @@ onUnmounted(() => {
 .about-link { display: flex; align-items: center; gap: 0.8rem; padding: 1rem 2rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; color: white; text-decoration: none; transition: all 0.3s ease; width: 200px; justify-content: center; }
 .about-link:hover { background: rgba(255, 255, 255, 0.15); transform: translateY(-2px); }
 .about-link .icon { width: 24px; height: 24px; }
+
+@media (max-width: 768px) {
+  .about-container { padding: 1rem 0; }
+  .about-content { padding: 0 0.5rem; }
+  .runtime-display { padding: 1rem; }
+  .runtime-time { flex-wrap: wrap; gap: 0.5rem; }
+  .runtime-value { font-size: 1.2rem; }
+  .about-link { width: 100%; max-width: 250px; }
+}
 
 .quickstudy-container { color: white; padding: 2rem 0; text-align: center; }
 .quickstudy-content { max-width: 400px; margin: 0 auto; }

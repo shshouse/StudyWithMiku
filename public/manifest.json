@@ -1,0 +1,19 @@
+{
+  "name": "Study with Miku - 初音未来主题自习室",
+  "short_name": "Study with Miku",
+  "description": "和初音未来一起学习吧！沉浸式学习陪伴网站",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#39c5bb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/public/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "categories": ["education", "productivity"],
+  "lang": "zh-CN"
+}

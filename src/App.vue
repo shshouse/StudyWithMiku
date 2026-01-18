@@ -412,7 +412,6 @@ onUnmounted(() => {
   color: white;
 }
 
-/* 窄屏适配 */
 @media (max-width: 490px) {
   .fullscreen-btn {
     position: fixed;
@@ -420,7 +419,7 @@ onUnmounted(() => {
     bottom: 73px;
     left: 20px;
     right: auto;
-    z-index: 4;    /* 防止盖住APlayer */
+    z-index: 4;
   }
 
   .switch-video-btn {
@@ -431,5 +430,66 @@ onUnmounted(() => {
     right: auto;
     z-index: 4;
   }
+}
+
+</style>
+
+
+<style>
+:deep(.aplayer-info) {
+  padding: 14px 7px 0 10px;
+}
+
+:deep(.aplayer-music) {
+  flex-grow: 1;
+  overflow: visible;
+  cursor: pointer;
+  position: relative;
+  height: 20px;
+}
+
+:deep(.aplayer-title) {
+  font-size: 14px;
+  display: inline-block;
+  white-space: nowrap;
+  animation: aplayer-title-scroll 15s linear infinite;
+  padding-right: 20px;
+}
+
+:deep(.aplayer-author) {
+  font-size: 12px;
+  color: #666;
+  display: inline-block;
+  white-space: nowrap;
+  animation: aplayer-author-scroll 15s linear infinite;
+  padding-right: 20px;
+}
+
+@keyframes aplayer-title-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes aplayer-author-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+:deep(.aplayer-music:hover .aplayer-title),
+:deep(.aplayer-music:hover .aplayer-author) {
+  animation-play-state: running;
+}
+
+:deep(.aplayer-title),
+:deep(.aplayer-author) {
+  animation-play-state: paused;
 }
 </style>
