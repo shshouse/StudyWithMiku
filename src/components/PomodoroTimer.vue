@@ -165,12 +165,12 @@
                           <span v-for="tag in item.tags" :key="tag" class="tag-badge" :class="getTagClass(tag)">{{ tag }}</span>
                         </div>
                         <span class="recommend-platform">{{ PLATFORMS.find(p => p.value === item.platform)?.label }}</span>
-                        <span class="recommend-id" @click="copyPlaylistId(item.playlistId)" title="点击复制">
+                        <a class="recommend-id" :href="getPlaylistUrl(item.platform, item.playlistId)" target="_blank" rel="noopener noreferrer" title="点击跳转">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                            <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
                           </svg>
                           ID: {{ item.playlistId }}
-                        </span>
+                        </a>
                       </div>
                     </div>
                   </div>
@@ -344,7 +344,16 @@ const formatStudyTime = (seconds) => { const h = Math.floor(seconds / 3600); con
 const applyPlaylist = async () => { if (!inputPlaylistId.value) return; await applyCustomPlaylist(selectedPlatform.value, inputPlaylistId.value); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
 const resetPlaylist = async () => { inputPlaylistId.value = ''; await resetToLocal(); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
 const applyRecommendPlaylist = async (item) => { await applyCustomPlaylist(item.platform, item.playlistId); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
-const copyPlaylistId = async (id) => { try { await navigator.clipboard.writeText(id) } catch { const input = document.createElement('input'); input.value = id; document.body.appendChild(input); input.select(); document.execCommand('copy'); document.body.removeChild(input) } }
+const getPlaylistUrl = (platform, id) => {
+  const urls = {
+    netease: `https://music.163.com/#/playlist?id=${id}`,
+    tencent: `https://y.qq.com/n/ryqq/playlist/${id}`,
+    kugou: `https://www.kugou.com/yy/special/single/${id}.html`,
+    kuwo: `http://www.kuwo.cn/playlist_detail/${id}`,
+    bilibili: `https://www.bilibili.com/audio/am${id}`
+  }
+  return urls[platform] || '#'
+}
 const getTagClass = (tag) => {
   if (tag === '适合学习') return 'tag-study'
   if (tag === '不适合学习') return 'tag-not-study'
@@ -373,6 +382,7 @@ const runtimeSeconds = computed(() => Math.floor((currentTime.value - startDate)
 let timeInterval = null
 let timer = null
 let studyTimeCounter = 0
+let lastTickTime = Date.now()
 
 watch(focusDuration, (newVal) => { if (currentStatus.value === STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(newVal, breakDuration.value, pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value) })
 watch(breakDuration, (newVal) => { if (currentStatus.value !== STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(focusDuration.value, newVal, pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value) })
@@ -398,7 +408,18 @@ const startTimer = () => {
   if (timeLeft.value <= 0) return
   isRunning.value = true
   studyTimeCounter = 0
+  lastTickTime = Date.now()
   timer = setInterval(() => {
+    const now = Date.now()
+    const elapsed = Math.floor((now - lastTickTime) / 1000)
+    lastTickTime = now
+    if (elapsed > 1) {
+      timeLeft.value = Math.max(0, timeLeft.value - elapsed + 1)
+      if (currentStatus.value === STATUS.FOCUS) {
+        studyTimeCounter += elapsed - 1
+        if (studyTimeCounter >= 60) { addStudyTime(Math.floor(studyTimeCounter / 60) * 60); studyTimeCounter = studyTimeCounter % 60 }
+      }
+    }
     timeLeft.value--
     if (currentStatus.value === STATUS.FOCUS) {
       studyTimeCounter++
@@ -439,9 +460,20 @@ const handleTimerComplete = () => {
   }
   const statusTextMap = { [STATUS.FOCUS]: '专注', [STATUS.BREAK]: '休息', [STATUS.LONG_BREAK]: '长休' }
   if (Notification.permission === 'granted') new Notification('番茄钟', { body: `${statusTextMap[completedStatus]}已完成！`, icon: '/favicon.ico' })
-  setTimeout(() => { startTimer() }, 1000)
+  isRunning.value = false
+  requestAnimationFrame(() => {
+    setTimeout(() => { startTimer() }, 1000)
+  })
 }
-const playNotificationSound = async () => { duckMusicForNotification(3000); await new Promise(r => setTimeout(r, 200)); new Audio('/BreakOrWork.mp3').play() }
+const playNotificationSound = () => {
+  duckMusicForNotification(3000)
+  setTimeout(() => {
+    try {
+      const audio = new Audio('/BreakOrWork.mp3')
+      audio.play().catch(() => {})
+    } catch (e) {}
+  }, 200)
+}
 const showNotification = () => { if (Notification.permission === 'granted') new Notification('番茄钟', { body: `${statusText.value}已完成！`, icon: '/favicon.ico' }) }
 const onUIMouseEnter = () => { setHoveringUI(true) }
 const onUIMouseLeave = () => { setHoveringUI(false) }
@@ -451,11 +483,18 @@ const onUITouchEnd = () => { setHoveringUI(false) }
 onMounted(() => {
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission()
   timeInterval = setInterval(() => { currentTime.value = new Date() }, 1000)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
   if (timeInterval) clearInterval(timeInterval)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible' && isRunning.value) {
+    lastTickTime = Date.now()
+  }
+}
 </script>
 
 <style scoped>
@@ -489,7 +528,7 @@ onUnmounted(() => {
 .online-text { font-size: 0.9rem; font-weight: 500; opacity: 0.9; }
 .countdown-clock:hover { background: rgba(255, 255, 255, 0.15); transform: translateX(-50%) translateY(-2px); }
 .countdown-clock.settings-open { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.4); }
-.clock-display { font-size: 1.5rem; font-weight: 600; }
+.clock-display { font-size: clamp(0.8rem, 3vw, 1.5rem); font-weight: 600; }
 .status-badge { padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.8rem; font-weight: 500; background: rgba(255, 255, 255, 0.1); }
 .status-badge.focus { color: #ff6b6b; }
 .status-badge.break { color: #4ecdc4; }
@@ -548,7 +587,7 @@ onUnmounted(() => {
 .progress-ring-fill.focus { color: #ff6b6b; }
 .progress-ring-fill.break { color: #4ecdc4; }
 .progress-ring-fill.long-break { color: #45b7d1; }
-.time-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.8rem; font-weight: 300; font-family: 'Courier New', monospace; }
+.time-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: clamp(1.2rem, 3.5vw, 2.5rem); font-weight: 300; font-family: 'Courier New', monospace; }
 .timer-controls { display: flex; gap: 0.4rem; justify-content: center; margin-bottom: 1.5rem; }
 .control-btn { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; padding: 0.6rem 0.8rem; color: white; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; }
 .control-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.2); transform: translateY(-2px); }
@@ -621,7 +660,7 @@ onUnmounted(() => {
 .tag-badge.tag-study { background: rgba(76, 175, 80, 0.2); border-color: rgba(76, 175, 80, 0.4); color: rgba(144, 238, 144, 0.9); }
 .tag-badge.tag-not-study { background: rgba(244, 67, 54, 0.2); border-color: rgba(244, 67, 54, 0.4); color: rgba(255, 99, 71, 0.9); }
 .recommend-platform { opacity: 0.7; }
-.recommend-id { cursor: pointer; padding: 0.2rem 0.5rem; background: rgba(255, 255, 255, 0.05); border-radius: 4px; transition: all 0.2s ease; display: flex; align-items: center; gap: 0.3rem; }
+.recommend-id { cursor: pointer; padding: 0.2rem 0.5rem; background: rgba(255, 255, 255, 0.05); border-radius: 4px; transition: all 0.2s ease; display: flex; align-items: center; gap: 0.3rem; text-decoration: none; color: inherit; }
 .recommend-id:hover { background: rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.9); }
 .recommend-id svg { flex-shrink: 0; }
 

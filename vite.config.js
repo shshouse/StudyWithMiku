@@ -2,9 +2,23 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const analyticsPlugin = () => {
+  return {
+    name: 'analytics-injector',
+    transformIndexHtml: (html) => {
+      const analyticsId = process.env.VITE_ANALYTICS_ID
+      const analyticsUrl = process.env.VITE_ANALYTICS_URL
+      if (!analyticsId || !analyticsUrl) return html
+      const scriptTag = `<script defer src="${analyticsUrl}" data-website-id="${analyticsId}"></script>`
+      return html.replace('</head>', `${scriptTag}</head>`)
+    }
+  }
+}
+
 export default defineConfig({
   plugins: [
     vue(),
+    analyticsPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'robots.txt', '*.mp3', '*.mp4'],
@@ -17,8 +31,18 @@ export default defineConfig({
         display: 'standalone',
         icons: [
           {
-            src: '/public/favicon.ico',
+            src: '/favicon.ico',
             sizes: '64x64 32x32 24x24 16x16',
+            type: 'image/x-icon'
+          },
+          {
+            src: '/favicon.ico',
+            sizes: '192x192',
+            type: 'image/x-icon'
+          },
+          {
+            src: '/favicon.ico',
+            sizes: '512x512',
             type: 'image/x-icon'
           }
         ]

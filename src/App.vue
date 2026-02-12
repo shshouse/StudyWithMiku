@@ -227,7 +227,7 @@ onMounted(() => {
       fixed: true,
       autoplay: true,
       audio: songs.value,
-      lrcType: 0,
+      lrcType: 3,
       theme: '#2980b9',
       loop: 'all',
       order: 'list',
@@ -436,11 +436,11 @@ onUnmounted(() => {
 
 
 <style>
-:deep(.aplayer-info) {
+.aplayer-info {
   padding: 14px 7px 0 10px;
 }
 
-:deep(.aplayer-music) {
+.aplayer-music {
   flex-grow: 1;
   overflow: visible;
   cursor: pointer;
@@ -448,7 +448,7 @@ onUnmounted(() => {
   height: 20px;
 }
 
-:deep(.aplayer-title) {
+.aplayer-title {
   font-size: 14px;
   display: inline-block;
   white-space: nowrap;
@@ -456,7 +456,7 @@ onUnmounted(() => {
   padding-right: 20px;
 }
 
-:deep(.aplayer-author) {
+.aplayer-author {
   font-size: 12px;
   color: #666;
   display: inline-block;
@@ -483,13 +483,39 @@ onUnmounted(() => {
   }
 }
 
-:deep(.aplayer-music:hover .aplayer-title),
-:deep(.aplayer-music:hover .aplayer-author) {
+.aplayer-music:hover .aplayer-title,
+.aplayer-music:hover .aplayer-author {
   animation-play-state: running;
 }
 
-:deep(.aplayer-title),
-:deep(.aplayer-author) {
+.aplayer-title,
+.aplayer-author {
   animation-play-state: paused;
+}
+
+.aplayer-lrc {
+  margin-bottom: 10px;
+  height: 46px;
+  overflow: hidden;
+}
+
+.aplayer-lrc-contents p {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: #fff !important;
+  opacity: 0.5;
+  filter: blur(0.6px);
+  transition: all 0.3s ease !important;
+  line-height: 20px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6) !important;
+}
+
+.aplayer-lrc-contents p.aplayer-lrc-current {
+  opacity: 1;
+  filter: blur(0);
+  font-size: 16px !important;
+  color: #39c5bb !important;
 }
 </style>
