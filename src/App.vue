@@ -129,15 +129,18 @@ const videoRef = ref(null)
 const isR2Domain = window.location.hostname === 'study.mikugame.icu'
 const R2_BASE_URL = 'https://studycdn.mikugame.icu/mp4'
 
+const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+const video2Name = isMobile ? '2_H264.mp4' : '2.mp4'
+
 const videos = isR2Domain
   ? [
       `${R2_BASE_URL}/1.mp4`,
-      `${R2_BASE_URL}/2.mp4`,
+      `${R2_BASE_URL}/${video2Name}`,
       `${R2_BASE_URL}/3.mp4`
     ]
   : [
       '/1.mp4',
-      '/2.mp4',
+      `/${video2Name}`,
       '/3.mp4'
     ]
 
