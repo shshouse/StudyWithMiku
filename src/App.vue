@@ -53,14 +53,12 @@ import AnnouncementModal from './components/AnnouncementModal.vue'
 
 const { isFullscreen, toggle: useFullscreenToggle } = useFullscreen()
 
-const isMobile = () => {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-}
+const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
 
 const toggleFullscreen = async () => {
   await useFullscreenToggle()
   
-  if (isMobile()) {
+  if (isMobile) {
     if (isFullscreen.value) {
       try {
         await screen.orientation.lock('landscape')
@@ -129,7 +127,6 @@ const videoRef = ref(null)
 const isR2Domain = window.location.hostname === 'study.mikugame.icu'
 const R2_BASE_URL = 'https://studycdn.mikugame.icu/mp4'
 
-const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
 const video2Name = isMobile ? '2_H264.mp4' : '2.mp4'
 
 const videos = isR2Domain
