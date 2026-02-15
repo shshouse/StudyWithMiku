@@ -138,7 +138,8 @@ const videos = isR2Domain
   : [
       '/1.mp4',
       `/${video2Name}`,
-      '/3.mp4'
+      '/3.mp4',
+      '/4.mp4'
     ]
 
 const savedVideoIndex = getVideoIndex()
