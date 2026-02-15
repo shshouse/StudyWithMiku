@@ -1,7 +1,7 @@
 {
   "name": "study-with-miku",
   "version": "0.0.1",
-  "description": "Study with Miku - 和Miku一起学习吧~",
+  "description": "自用Miku学习室",
   "type": "module",
   "scripts": {
     "dev": "vite",
