@@ -23,9 +23,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'robots.txt', '*.mp3', '*.mp4'],
       manifest: {
-        name: 'Study with Miku - 初音未来主题自习室',
+        name: '自用Miku学习室',
         short_name: 'Study with Miku',
-        description: '和初音未来一起学习吧！沉浸式学习陪伴网站',
+        description: 'Miku，爽！',
         theme_color: '#39c5bb',
         background_color: '#ffffff',
         display: 'standalone',
