@@ -2,7 +2,7 @@ export const updates = [
   {
   date: '2026-2-14',
   content: [
-    'fork自用',
+    'fork自用，夹带点私货',
     '源项目：https://github.com/shshouse/StudyWithMiku'
   ]
   },
