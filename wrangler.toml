@@ -14,3 +14,5 @@ custom_domain = true
 [[routes]]
 pattern = "https://study.mikumod.com/*"
 custom_domain = true
+# wrangler.toml
+name = 'study'
