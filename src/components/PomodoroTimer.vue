@@ -31,6 +31,14 @@
       </transition>
     </div>
     <transition name="fade">
+      <div v-if="showVisualAlert" class="visual-alert-overlay" @click="dismissVisualAlert">
+        <div class="visual-alert-box">
+          <div class="visual-alert-text">{{ visualAlertMessage }}</div>
+          <div class="visual-alert-hint">点击任意处关闭</div>
+        </div>
+      </div>
+    </transition>
+    <transition name="fade">
       <div v-if="showSettings" class="settings-overlay" @click.self="closeSettings" @mouseenter="onUIMouseEnter" @mouseleave="onUIMouseLeave" @touchstart="onUITouchStart" @touchend="onUITouchEnd">
         <div class="settings-panel">
           <div class="settings-header">
@@ -389,6 +397,10 @@ const isRunning = ref(false)
 const currentStatus = ref(STATUS.FOCUS)
 const completedPomodoros = ref(0)
 const showSettings = ref(false)
+const showVisualAlert = ref(false)
+const visualAlertMessage = ref('')
+let titleFlashTimer = null
+let preloadedAudio = null
 const currentTime = ref(new Date())
 const systemTime = computed(() => `${currentTime.value.getHours().toString().padStart(2, '0')}:${currentTime.value.getMinutes().toString().padStart(2, '0')}`)
 const startDate = new Date('2025-12-02T00:00:00')
@@ -452,8 +464,21 @@ const timerUpdate = () => {
     scheduleNextTick()
   }
 }
+const preloadNotificationAudio = () => {
+  try {
+    if (!preloadedAudio) {
+      preloadedAudio = new Audio('/BreakOrWork.mp3')
+      preloadedAudio.preload = 'auto'
+    }
+    preloadedAudio.volume = 0
+    preloadedAudio.currentTime = 0
+    const p = preloadedAudio.play()
+    if (p) p.then(() => { preloadedAudio.pause(); preloadedAudio.currentTime = 0; preloadedAudio.volume = 1 }).catch(() => {})
+  } catch (e) {}
+}
 const startTimer = () => {
   if (timeLeft.value <= 0) return
+  preloadNotificationAudio()
   isRunning.value = true
   studyTimeCounter = 0
   lastRecordedTimeLeft = timeLeft.value
@@ -491,7 +516,9 @@ const handleTimerComplete = () => {
     }
   }
   const statusTextMap = { [STATUS.FOCUS]: '专注', [STATUS.BREAK]: '休息', [STATUS.LONG_BREAK]: '长休' }
-  try { if (Notification.permission === 'granted') new Notification('番茄钟', { body: `${statusTextMap[completedStatus]}已完成！`, icon: '/favicon.ico' }) } catch(e) {}
+  const alertMsg = `${statusTextMap[completedStatus]}已完成！`
+  try { if ('Notification' in window && Notification.permission === 'granted') new Notification('番茄钟', { body: alertMsg, icon: '/favicon.ico' }) } catch(e) {}
+  showVisualNotification(alertMsg)
   studyTimeCounter = 0
   lastRecordedTimeLeft = timeLeft.value
   phaseEndTime = Date.now() + timeLeft.value * 1000
@@ -501,10 +528,32 @@ const playNotificationSound = () => {
   duckMusicForNotification(3000)
   setTimeout(() => {
     try {
-      const audio = new Audio('/BreakOrWork.mp3')
-      audio.play().catch(() => {})
+      if (preloadedAudio) {
+        preloadedAudio.currentTime = 0
+        preloadedAudio.volume = 1
+        preloadedAudio.play().catch(() => {})
+      } else {
+        const audio = new Audio('/BreakOrWork.mp3')
+        audio.play().catch(() => {})
+      }
     } catch (e) {}
   }, 200)
+}
+const showVisualNotification = (message) => {
+  visualAlertMessage.value = message
+  showVisualAlert.value = true
+  const originalTitle = document.title
+  let flash = true
+  titleFlashTimer = setInterval(() => {
+    document.title = flash ? `【${message}】` : originalTitle
+    flash = !flash
+  }, 800)
+  setTimeout(() => dismissVisualAlert(), 15000)
+}
+const dismissVisualAlert = () => {
+  showVisualAlert.value = false
+  if (titleFlashTimer) { clearInterval(titleFlashTimer); titleFlashTimer = null }
+  document.title = 'StudyWithMiku'
 }
 const onUIMouseEnter = () => { setHoveringUI(true) }
 const onUIMouseLeave = () => { setHoveringUI(false) }
@@ -519,6 +568,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (timer) clearTimeout(timer)
   if (timeInterval) clearInterval(timeInterval)
+  if (titleFlashTimer) clearInterval(titleFlashTimer)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 const handleVisibilityChange = () => {
@@ -799,4 +849,22 @@ const handleVisibilityChange = () => {
 .quickstudy-content p { margin-bottom: 1.5rem; font-size: 0.9rem; opacity: 0.9; }
 .quickstudy-link { display: inline-block; padding: 1rem 2rem; background: rgba(76, 175, 80, 0.3); border: 1px solid rgba(76, 175, 80, 0.5); border-radius: 10px; color: white; text-decoration: none; font-size: 1rem; font-weight: 500; transition: all 0.3s ease; }
 .quickstudy-link:hover { background: rgba(76, 175, 80, 0.5); transform: translateY(-2px); }
+
+.visual-alert-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.75); display: flex; justify-content: center; align-items: center;
+  z-index: 9999; cursor: pointer;
+}
+.visual-alert-box {
+  background: rgba(255, 255, 255, 0.12); backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 20px;
+  padding: 2.5rem 3rem; text-align: center; color: white;
+  animation: alertPulse 1.5s ease-in-out infinite;
+}
+.visual-alert-text { font-size: 1.3rem; font-weight: 600; margin-bottom: 0.8rem; }
+.visual-alert-hint { font-size: 0.8rem; opacity: 0.5; }
+@keyframes alertPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(255, 107, 107, 0.3); }
+  50% { transform: scale(1.03); box-shadow: 0 0 40px rgba(255, 107, 107, 0.5); }
+}
 </style>
