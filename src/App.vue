@@ -57,18 +57,6 @@ const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
 
 const toggleFullscreen = async () => {
   await useFullscreenToggle()
-  
-  if (isMobile) {
-    if (isFullscreen.value) {
-      try {
-        await screen.orientation.lock('landscape')
-      } catch (e) {
-        console.log('无法锁定屏幕方向:', e)
-      }
-    } else {
-      screen.orientation.unlock()
-    }
-  }
 }
 const showControls = ref(true)
 const inactivityTimer = ref(null)
