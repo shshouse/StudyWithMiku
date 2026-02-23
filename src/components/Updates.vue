@@ -6,6 +6,9 @@
         <div class="update-content">
           <p v-for="(item, index) in update.content" :key="index">{{ item }}</p>
         </div>
+        <div v-if="update.images?.length" class="update-images">
+          <img v-for="(img, i) in update.images" :key="i" :src="img" class="update-img" />
+        </div>
       </div>
     </div>
   </div>
@@ -46,6 +49,19 @@ import { updates } from '../data/updates.js'
   font-size: 0.9rem;
   line-height: 1.5;
   opacity: 0.9;
+}
+
+.update-images {
+  margin-top: 0.8rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.update-img {
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .updates-container::-webkit-scrollbar {

@@ -32,8 +32,12 @@ const latestUpdate = computed(() => updates[0])
 
 const announcementContent = computed(() => {
   const contentHtml = latestUpdate.value.content.map(item => `<p>${item}</p>`).join('')
+  const imagesHtml = latestUpdate.value.images?.length
+    ? `<div style="margin-top: 0.8rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">${latestUpdate.value.images.map(img => `<img src="${img}" style="max-width: 100%; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);" />`).join('')}</div>`
+    : ''
   return `
     ${contentHtml}
+    ${imagesHtml}
     <p style="margin-top: 1rem; font-size: 0.9rem; opacity: 0.7;">更多更新日志请查看番茄钟设置中的"更新日志"标签页</p>
   `
 })
