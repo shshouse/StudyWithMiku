@@ -31,6 +31,11 @@
       </transition>
     </div>
     <transition name="fade">
+      <div v-if="showHitokoto && showHitokotoAnimation" :key="currentHitokoto" class="hitokoto-container">
+        {{ currentHitokoto }}
+      </div>
+    </transition>
+    <transition name="fade">
       <div v-if="showSettings" class="settings-overlay" @click.self="closeSettings" @mouseenter="onUIMouseEnter" @mouseleave="onUIMouseLeave" @touchstart="onUITouchStart" @touchend="onUITouchEnd">
         <div class="settings-panel">
           <div class="settings-header">
@@ -110,21 +115,28 @@
                   <div class="setting-group">
                     <label>专注结束时暂停音乐</label>
                     <label class="toggle-switch">
-                      <input type="checkbox" v-model="pauseMusicOnFocusEnd" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle)"/>
+                      <input type="checkbox" v-model="pauseMusicOnFocusEnd" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
                       <span class="toggle-slider"></span>
                     </label>
                   </div>
                   <div class="setting-group">
                     <label>休息结束时暂停音乐</label>
                     <label class="toggle-switch">
-                      <input type="checkbox" v-model="pauseMusicOnBreakEnd" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle)"/>
+                      <input type="checkbox" v-model="pauseMusicOnBreakEnd" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
                       <span class="toggle-slider"></span>
                     </label>
                   </div>
                   <div class="setting-group">
                     <label>无操作隐藏番茄钟</label>
                     <label class="toggle-switch">
-                      <input type="checkbox" v-model="hidePomodoroOnIdle" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle)"/>
+                      <input type="checkbox" v-model="hidePomodoroOnIdle" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div class="setting-group">
+                    <label>显示一言（测试）</label>
+                    <label class="toggle-switch">
+                      <input type="checkbox" v-model="showHitokoto" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
                       <span class="toggle-slider"></span>
                     </label>
                   </div>
@@ -252,6 +264,7 @@ import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../
 import { getPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings } from '../utils/userSettings.js'
 import { recommendPlaylists, LATEST_PLAYLIST_VERSION } from '../data/playlists.js'
 import { LATEST_UPDATE_VERSION } from '../data/updates.js'
+import { getRandomQuote } from '../data/quotes.js'
 import Updates from './Updates.vue'
 
 const UPDATE_READ_KEY = 'last_read_update'
@@ -282,6 +295,8 @@ const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_
 const inputPlaylistId = ref('')
 const selectedPlatform = ref(platform.value)
 const currentTab = ref('pomodoro')
+const currentHitokoto = ref('')
+const showHitokotoAnimation = ref(false)
 const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', todos: '待办列表', playlist: '歌单设置', stats: '学习数据', updates: '更新日志', quickstudy: '一键学习', about: '关于' }[currentTab.value]))
 
 const TODOS_KEY = 'study_todos'
@@ -376,8 +391,7 @@ const getPlaylistUrl = (platform, id) => {
   return urls[platform] || '#'
 }
 const getTagClass = (tag) => {
-  if (tag === '适合学习') return 'tag-study'
-  if (tag === '不适合学习') return 'tag-not-study'
+  if (tag === '站长推荐') return 'tag-study'
   return ''
 }
 
@@ -388,6 +402,7 @@ const breakDuration = ref(savedPomodoro.breakDuration)
 const pauseMusicOnFocusEnd = ref(savedPomodoro.pauseMusicOnFocusEnd || false)
 const pauseMusicOnBreakEnd = ref(savedPomodoro.pauseMusicOnBreakEnd || false)
 const hidePomodoroOnIdle = ref(savedPomodoro.hidePomodoroOnIdle || false)
+const showHitokoto = ref(savedPomodoro.showHitokoto || false)
 const timeLeft = ref(focusDuration.value * 60)
 const isRunning = ref(false)
 const currentStatus = ref(STATUS.FOCUS)
@@ -406,16 +421,32 @@ let timer = null
 let studyTimeCounter = 0
 let phaseEndTime = null
 let lastRecordedTimeLeft = 0
+let hitokotoInterval = null
 
-watch(focusDuration, (newVal) => { if (currentStatus.value === STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(newVal, breakDuration.value, pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value) })
-watch(breakDuration, (newVal) => { if (currentStatus.value !== STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(focusDuration.value, newVal, pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value) })
+watch(focusDuration, (newVal) => { if (currentStatus.value === STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(newVal, breakDuration.value, pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value) })
+watch(breakDuration, (newVal) => { if (currentStatus.value !== STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(focusDuration.value, newVal, pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value) })
 watch(hidePomodoroOnIdle, (newVal) => {
   if (newVal) {
     document.addEventListener('mousemove', handleGlobalMouseMove)
   } else {
     document.removeEventListener('mousemove', handleGlobalMouseMove)
   }
+  saveMusicPauseSettings(pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value)
 })
+watch(showHitokoto, () => {
+  saveMusicPauseSettings(pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value)
+  if (showHitokoto.value) {
+    showHitokotoAnimation.value = true
+  }
+})
+
+const rotateHitokoto = () => {
+  showHitokotoAnimation.value = false
+  setTimeout(() => {
+    currentHitokoto.value = getRandomQuote()
+    showHitokotoAnimation.value = true
+  }, 300)
+}
 
 const formattedMinutes = computed(() => Math.floor(timeLeft.value / 60).toString().padStart(2, '0'))
 const formattedSeconds = computed(() => (timeLeft.value % 60).toString().padStart(2, '0'))
@@ -537,13 +568,17 @@ const onUITouchStart = () => { setHoveringUI(true) }
 const onUITouchEnd = () => { setHoveringUI(false) }
 
 onMounted(() => {
+  currentHitokoto.value = getRandomQuote()
+  showHitokotoAnimation.value = true
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission()
   timeInterval = setInterval(() => { currentTime.value = new Date() }, 1000)
+  hitokotoInterval = setInterval(rotateHitokoto, 5 * 60 * 1000)
   document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 onUnmounted(() => {
   if (timer) clearTimeout(timer)
   if (timeInterval) clearInterval(timeInterval)
+  if (hitokotoInterval) clearInterval(hitokotoInterval)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 const handleVisibilityChange = () => {
@@ -586,6 +621,17 @@ const handleVisibilityChange = () => {
 .online-dot { width: 8px; height: 8px; border-radius: 50%; background: #666; transition: background 0.3s ease; }
 .online-dot.connected { background: #4caf50; box-shadow: 0 0 8px rgba(76, 175, 80, 0.6); }
 .online-text { font-size: 0.9rem; font-weight: 500; opacity: 0.9; }
+.hitokoto-container {
+  position: fixed; top: 115px; left: 50%; transform: translateX(-50%); z-index: 1002;
+  max-width: 600px; padding: 0;
+  color: white; font-size: 0.95rem; line-height: 1.6; text-align: center;
+  transition: all 0.3s ease; opacity: 0.9;
+}
+@media (max-width: 768px) {
+  .hitokoto-container {
+    top: 115px; max-width: 90%; padding: 0; font-size: 0.85rem;
+  }
+}
 .countdown-clock:hover { background: rgba(255, 255, 255, 0.15); transform: translateX(-50%) translateY(-2px); }
 .countdown-clock.settings-open { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.4); }
 .clock-display { font-size: clamp(0.8rem, 3vw, 1.5rem); font-weight: 600; }
