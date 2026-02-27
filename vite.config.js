@@ -25,7 +25,7 @@ export default defineConfig({
       manifest: {
         name: 'Study with Miku - 初音未来主题自习室',
         short_name: 'Study with Miku',
-        description: '和初音未来一起学习吧！沉浸式学习陪伴网站',
+        description: '在悠闲的音乐里和初音一起学习吧，沉浸式学习陪伴网站',
         theme_color: '#39c5bb',
         background_color: '#ffffff',
         display: 'standalone',

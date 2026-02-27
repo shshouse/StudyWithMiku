@@ -192,8 +192,23 @@
 
               <div v-else-if="currentTab === 'stats'" class="stats-container">
                 <div class="login-section">
-                  <p class="login-hint">登录MikuMod账号后可云端同步学习数据</p>
-                  <button class="action-btn login-btn" disabled>即将开放</button>
+                  <template v-if="!isLoggedIn">
+                    <p class="login-hint">登录MikuMod账号后可云端同步学习数据</p>
+                    <button class="action-btn login-btn" @click="login">登录</button>
+                  </template>
+                  <template v-else>
+                    <div class="user-info">
+                      <p class="login-hint">已登录为: <span class="username">{{ username }}</span></p>
+                      <div class="sync-status">
+                        <span class="status-dot" :class="syncStatus"></span>
+                        <span class="sync-status-text">{{ syncStatusText }}</span>
+                      </div>
+                    </div>
+                    <div class="sync-actions">
+                      <button class="action-btn" @click="manualSync" :disabled="syncStatus === 'syncing'">数据同步</button>
+                      <button class="action-btn logout-btn" @click="logout">退出登录</button>
+                    </div>
+                  </template>
                 </div>
                 <div class="stat-item"><span class="stat-label">总学习时长</span><span class="stat-value">{{ formatStudyTime(studyStats.totalStudyTime) }}</span></div>
                 <div class="stat-item"><span class="stat-label">完成番茄数</span><span class="stat-value">{{ studyStats.totalPomodoros }}</span></div>
@@ -253,6 +268,30 @@
         </div>
       </div>
     </transition>
+    <transition name="fade">
+      <div v-if="showConflictModal" class="conflict-modal-overlay">
+        <div class="conflict-modal">
+          <h3>数据冲突了！</h3>
+          <p>检测到云端有不同的学习数据，想把哪一份保存到云端呢ヽ(✿ﾟ▽ﾟ)ノ</p>
+          <div class="conflict-data-comparison">
+            <div class="data-column local">
+              <h4>本地数据</h4>
+              <div>总学习: {{ formatStudyTime(studyStats.totalStudyTime) }}</div>
+              <div>总番茄: {{ studyStats.totalPomodoros }}</div>
+            </div>
+            <div class="data-column remote">
+              <h4>云端数据</h4>
+              <div>总学习: {{ formatStudyTime(conflictData?.stats?.totalStudyTime || 0) }}</div>
+              <div>总番茄: {{ conflictData?.stats?.totalPomodoros || 0 }}</div>
+            </div>
+          </div>
+          <div class="conflict-actions">
+            <button class="action-btn use-local-btn" @click="handleResolveConflict('local')">使用本地数据</button>
+            <button class="action-btn use-remote-btn" @click="handleResolveConflict('remote')">使用云端数据</button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -266,6 +305,8 @@ import { recommendPlaylists, LATEST_PLAYLIST_VERSION } from '../data/playlists.j
 import { LATEST_UPDATE_VERSION } from '../data/updates.js'
 import { getRandomQuote } from '../data/quotes.js'
 import Updates from './Updates.vue'
+import { useStudyAuth } from '../composables/useStudyAuth.js'
+import { useStudySync } from '../composables/useStudySync.js'
 
 const UPDATE_READ_KEY = 'last_read_update'
 const PLAYLIST_READ_KEY = 'last_read_playlist'
@@ -291,6 +332,54 @@ const props = defineProps({
 
 const { onlineCount, isConnected } = useOnlineCount(import.meta.env.VITE_WS_URL)
 const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS } = useMusic()
+
+const { token, username, isLoggedIn, login, logout, isTokenExpired } = useStudyAuth()
+const { syncStatus, lastSyncTime, conflictData, syncOnLogin, resolveConflict, pushData } = useStudySync()
+
+const showConflictModal = ref(false)
+
+const syncStatusText = computed(() => {
+  if (syncStatus.value === 'syncing') return '同步中...'
+  if (syncStatus.value === 'error') return '同步失败'
+  if (syncStatus.value === 'done') {
+    return lastSyncTime.value 
+      ? `已同步 (${lastSyncTime.value.getHours().toString().padStart(2, '0')}:${lastSyncTime.value.getMinutes().toString().padStart(2, '0')})` 
+      : '已同步'
+  }
+  return '未同步'
+})
+
+let pushTimeout = null
+const triggerSync = () => {
+  if (!isLoggedIn.value) return
+  if (pushTimeout) clearTimeout(pushTimeout)
+  pushTimeout = setTimeout(() => {
+    pushData(studyStats, todos.value, getPomodoroSettings())
+  }, 2000)
+}
+
+const manualSync = () => {
+  if (!isLoggedIn.value) return
+  pushData(studyStats, todos.value, getPomodoroSettings())
+}
+
+const handleResolveConflict = async (choice, remoteDataObj = null) => {
+  const remote = remoteDataObj || await resolveConflict(choice, studyStats, todos.value, getPomodoroSettings())
+  if (choice === 'remote' && remote) {
+    if (remote.stats) { Object.assign(studyStats, remote.stats); saveStats(false) }
+    if (remote.todos) { todos.value = remote.todos; saveTodos(false) }
+    if (remote.settings) {
+      savePomodoroSettings(remote.settings.focusDuration || 25, remote.settings.breakDuration || 5, remote.settings.pauseMusicOnFocusEnd || false, remote.settings.pauseMusicOnBreakEnd || false, remote.settings.hidePomodoroOnIdle || false, remote.settings.showHitokoto || false)
+      focusDuration.value = remote.settings.focusDuration || 25
+      breakDuration.value = remote.settings.breakDuration || 5
+      pauseMusicOnFocusEnd.value = remote.settings.pauseMusicOnFocusEnd || false
+      pauseMusicOnBreakEnd.value = remote.settings.pauseMusicOnBreakEnd || false
+      hidePomodoroOnIdle.value = remote.settings.hidePomodoroOnIdle || false
+      showHitokoto.value = remote.settings.showHitokoto || false
+    }
+  }
+  showConflictModal.value = false
+}
 
 const inputPlaylistId = ref('')
 const selectedPlatform = ref(platform.value)
@@ -327,7 +416,7 @@ const currentTodo = computed(() => {
   const uncompletedTodos = todos.value.filter(t => !t.completed)
   return uncompletedTodos[uncompletedTodos.length - 1]
 })
-const saveTodos = () => localStorage.setItem(TODOS_KEY, JSON.stringify(todos.value))
+const saveTodos = (sync = true) => { localStorage.setItem(TODOS_KEY, JSON.stringify(todos.value)); if (sync) triggerSync() }
 const saveShowTodoOnClock = () => localStorage.setItem(SHOW_TODO_KEY, showTodoOnClock.value.toString())
 const addTodo = () => {
   if (!newTodoText.value.trim()) return
@@ -371,7 +460,7 @@ const loadStats = () => {
   return { totalStudyTime: 0, totalPomodoros: 0, todayStudyTime: 0, todayPomodoros: 0, lastDate: getToday() }
 }
 const studyStats = reactive(loadStats())
-const saveStats = () => localStorage.setItem(STATS_KEY, JSON.stringify(studyStats))
+const saveStats = (sync = true) => { localStorage.setItem(STATS_KEY, JSON.stringify(studyStats)); if (sync) triggerSync() }
 const addStudyTime = (seconds) => { studyStats.totalStudyTime += seconds; studyStats.todayStudyTime += seconds; saveStats() }
 const addPomodoro = () => { studyStats.totalPomodoros++; studyStats.todayPomodoros++; saveStats() }
 const resetStats = () => { studyStats.totalStudyTime = 0; studyStats.totalPomodoros = 0; studyStats.todayStudyTime = 0; studyStats.todayPomodoros = 0; studyStats.lastDate = getToday(); saveStats() }
@@ -423,8 +512,9 @@ let phaseEndTime = null
 let lastRecordedTimeLeft = 0
 let hitokotoInterval = null
 
-watch(focusDuration, (newVal) => { if (currentStatus.value === STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(newVal, breakDuration.value, pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value) })
-watch(breakDuration, (newVal) => { if (currentStatus.value !== STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(focusDuration.value, newVal, pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value) })
+watch(focusDuration, (newVal) => { if (currentStatus.value === STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(newVal, breakDuration.value, pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
+watch(breakDuration, (newVal) => { if (currentStatus.value !== STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(focusDuration.value, newVal, pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
+watch([pauseMusicOnFocusEnd, pauseMusicOnBreakEnd], () => { saveMusicPauseSettings(pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
 watch(hidePomodoroOnIdle, (newVal) => {
   if (newVal) {
     document.addEventListener('mousemove', handleGlobalMouseMove)
@@ -432,9 +522,11 @@ watch(hidePomodoroOnIdle, (newVal) => {
     document.removeEventListener('mousemove', handleGlobalMouseMove)
   }
   saveMusicPauseSettings(pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value)
+  triggerSync()
 })
 watch(showHitokoto, () => {
   saveMusicPauseSettings(pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value)
+  triggerSync()
   if (showHitokoto.value) {
     showHitokotoAnimation.value = true
   }
@@ -567,7 +659,16 @@ const onUIMouseLeave = () => { setHoveringUI(false) }
 const onUITouchStart = () => { setHoveringUI(true) }
 const onUITouchEnd = () => { setHoveringUI(false) }
 
-onMounted(() => {
+onMounted(async () => {
+  if (isLoggedIn.value && !isTokenExpired()) {
+    const { needResolve, applyRemote } = await syncOnLogin(studyStats, todos.value, getPomodoroSettings())
+    if (needResolve) {
+      showConflictModal.value = true
+    } else if (applyRemote) {
+      await handleResolveConflict('remote', applyRemote)
+    }
+  }
+
   currentHitokoto.value = getRandomQuote()
   showHitokotoAnimation.value = true
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission()
@@ -871,4 +972,31 @@ const handleVisibilityChange = () => {
 .quickstudy-content p { margin-bottom: 1.5rem; font-size: 0.9rem; opacity: 0.9; }
 .quickstudy-link { display: inline-block; padding: 1rem 2rem; background: rgba(76, 175, 80, 0.3); border: 1px solid rgba(76, 175, 80, 0.5); border-radius: 10px; color: white; text-decoration: none; font-size: 1rem; font-weight: 500; transition: all 0.3s ease; }
 .quickstudy-link:hover { background: rgba(76, 175, 80, 0.5); transform: translateY(-2px); }
+
+.user-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
+.sync-status { display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.6rem; border-radius: 12px; background: rgba(0, 0, 0, 0.2); font-size: 0.8rem; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
+.status-dot.idle { background: #95a5a6; }
+.status-dot.syncing { background: #f39c12; animation: blink 1s infinite alternate; }
+.status-dot.done { background: #2ecc71; }
+.status-dot.error { background: #e74c3c; }
+.sync-status-text { opacity: 0.8; }
+.sync-actions { display: flex; gap: 0.5rem; justify-content: center; }
+.logout-btn { background: rgba(231, 76, 60, 0.3); border-color: rgba(231, 76, 60, 0.5); }
+@keyframes blink { from { opacity: 0.5; } to { opacity: 1; } }
+
+.conflict-modal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; border-radius: 20px; backdrop-filter: blur(5px); }
+.conflict-modal { background: #2c3e50; padding: 1.5rem; border-radius: 15px; width: 90%; max-width: 400px; color: white; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); }
+.conflict-modal h3 { margin-top: 0; color: #ff6b6b; margin-bottom: 0.5rem; }
+.conflict-modal p { font-size: 0.9rem; opacity: 0.8; margin-bottom: 1.2rem; }
+.conflict-data-comparison { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+.data-column { flex: 1; padding: 1rem; border-radius: 8px; background: rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 0.4rem; }
+.data-column h4 { margin: 0 0 0.5rem 0; font-size: 0.9rem; opacity: 0.9; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.3rem; }
+.data-column div { font-size: 0.85rem; font-family: monospace; }
+.data-column.local { border-left: 3px solid #ff9f43; }
+.data-column.remote { border-left: 3px solid #4ecdc4; }
+.conflict-actions { display: flex; flex-direction: column; gap: 0.8rem; }
+.use-local-btn { background: rgba(255, 159, 67, 0.2); border-color: #ff9f43; }
+.use-remote-btn { background: rgba(78, 205, 196, 0.2); border-color: #4ecdc4; }
+
 </style>

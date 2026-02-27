@@ -1,5 +1,10 @@
 <template>
   <div class="app-container" @mousemove="onMouseMove" @mouseleave="onMouseLeave">
+    <div v-if="isDeprecatedDomain" class="deprecation-banner">
+      <span>当前域名即将弃用，请尽快同步学习数据并使用 </span>
+      <a href="https://study.mikumod.com" class="new-domain-link">study.mikumod.com</a>
+      <button class="dismiss-btn" @click="isDeprecatedDomain = false">×</button>
+    </div>
     <transition name="fade" mode="out-in">
       <video 
         :key="currentVideo"
@@ -54,6 +59,7 @@ import AnnouncementModal from './components/AnnouncementModal.vue'
 const { isFullscreen, toggle: useFullscreenToggle } = useFullscreen()
 
 const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+const isDeprecatedDomain = ref(window.location.hostname === 'study.mikugame.icu')
 
 const toggleFullscreen = async () => {
   await useFullscreenToggle()
@@ -555,4 +561,10 @@ onUnmounted(() => {
   opacity: 1 !important;
   transition: opacity 0.3s ease;
 }
+
+.deprecation-banner { position: fixed; top: 0; left: 0; width: 100%; background: rgba(231, 76, 60, 0.9); color: white; padding: 0.6rem 1rem; text-align: center; z-index: 9999; font-size: 0.85rem; backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
+.new-domain-link { color: #fff; font-weight: 600; text-decoration: underline; }
+.dismiss-btn { background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; margin-left: 0.5rem; opacity: 0.8; }
+.dismiss-btn:hover { opacity: 1; }
 </style>
+
