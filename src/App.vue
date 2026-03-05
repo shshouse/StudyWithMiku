@@ -121,7 +121,7 @@ const videoRef = ref(null)
 const isR2Domain = window.location.hostname === 'study.mikugame.icu'
 const R2_BASE_URL = 'https://studycdn.mikugame.icu/mp4'
 
-const video2Name = isMobile ? '2_H264.mp4' : '2.mp4'
+const video2Name = '2.mp4'
 
 const videos = isR2Domain
   ? [
