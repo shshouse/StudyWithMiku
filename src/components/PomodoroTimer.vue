@@ -31,8 +31,9 @@
       </transition>
     </div>
     <transition name="fade">
-      <div v-if="showHitokoto && showHitokotoAnimation" :key="currentHitokoto" class="hitokoto-container">
-        {{ currentHitokoto }}
+      <div v-if="showHitokoto && showHitokotoAnimation" :key="currentHitokoto.text" class="hitokoto-container">
+        {{ currentHitokoto.text }}
+        <span v-if="currentHitokoto.source" class="hitokoto-source">{{ currentHitokoto.source }}</span>
       </div>
     </transition>
     <transition name="fade">
@@ -384,7 +385,7 @@ const handleResolveConflict = async (choice, remoteDataObj = null) => {
 const inputPlaylistId = ref('')
 const selectedPlatform = ref(platform.value)
 const currentTab = ref('pomodoro')
-const currentHitokoto = ref('')
+const currentHitokoto = ref({ text: '', source: '' })
 const showHitokotoAnimation = ref(false)
 const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', todos: '待办列表', playlist: '歌单设置', stats: '学习数据', updates: '更新日志', quickstudy: '一键学习', about: '关于' }[currentTab.value]))
 
@@ -726,7 +727,10 @@ const handleVisibilityChange = () => {
   position: fixed; top: 115px; left: 50%; transform: translateX(-50%); z-index: 1002;
   max-width: 600px; padding: 0;
   color: white; font-size: 0.95rem; line-height: 1.6; text-align: center;
-  transition: all 0.3s ease; opacity: 0.9;
+  word-break: break-word; transition: all 0.3s ease; opacity: 0.9;
+}
+.hitokoto-source {
+  display: block; margin-top: 0.3em; font-size: 0.8em; opacity: 0.6;
 }
 @media (max-width: 768px) {
   .hitokoto-container {

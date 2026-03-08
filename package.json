@@ -17,6 +17,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.2.3",
     "copyfiles": "^2.4.1",
+    "music-metadata": "^11.12.1",
     "vite": "^4.4.5",
     "vite-plugin-pwa": "^1.2.0",
     "wrangler": "^4.53.0"

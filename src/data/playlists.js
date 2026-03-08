@@ -1,11 +1,11 @@
 export const recommendPlaylists = [
   {
     id: '1',
-    name: '站长神秘歌单',
-    desc: '？',
+    name: '站长神秘歌单+7首神秘音乐',
+    desc: '?',
     platform: 'netease',
     playlistId: '8894040639',
-    tags: ['较慢','平静']
+    tags: ['神秘','有Miku','较慢','平静']
   },
   {
     id: '2',

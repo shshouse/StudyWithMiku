@@ -56,6 +56,35 @@ import { getVideoIndex, saveVideoIndex, getMusicIndex, saveMusicIndex } from './
 import PomodoroTimer from './components/PomodoroTimer.vue'
 import AnnouncementModal from './components/AnnouncementModal.vue'
 
+const APLAYER_SETTINGS_KEY = 'aplayer_settings'
+
+const defaultAPlayerSettings = {
+  volume: 0.7,
+  loop: 'all',
+  order: 'list',
+  listFolded: false
+}
+
+const getAPlayerSettings = () => {
+  try {
+    const saved = localStorage.getItem(APLAYER_SETTINGS_KEY)
+    if (saved) {
+      return { ...defaultAPlayerSettings, ...JSON.parse(saved) }
+    }
+  } catch (e) {
+    console.error('读取 APlayer 设置失败:', e)
+  }
+  return defaultAPlayerSettings
+}
+
+const saveAPlayerSettings = (settings) => {
+  try {
+    localStorage.setItem(APLAYER_SETTINGS_KEY, JSON.stringify(settings))
+  } catch (e) {
+    console.error('保存 APlayer 设置失败:', e)
+  }
+}
+
 const { isFullscreen, toggle: useFullscreenToggle } = useFullscreen()
 
 const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
@@ -193,10 +222,6 @@ watch(showControls, (newValue) => {
   }
 })
 
-const reportVisit = () => {
-  fetch('/api/visit', { method: 'POST' }).catch(() => {})
-}
-
 const load51LaAnalytics = () => {
   if (document.getElementById('LA_COLLECT')) return
   const script = document.createElement('script')
@@ -213,7 +238,6 @@ const load51LaAnalytics = () => {
 
 onMounted(() => {
   load51LaAnalytics()
-  reportVisit()
   const preloadAllVideos = async () => {
     try {
       await preloadVideos(videos)
@@ -241,6 +265,8 @@ onMounted(() => {
     await loadSongs()
     
     const savedMusicIndex = getMusicIndex()
+    const savedSettings = getAPlayerSettings()
+    
     aplayer.value = new APlayer({
       container: document.getElementById('aplayer'),
       fixed: true,
@@ -248,12 +274,12 @@ onMounted(() => {
       audio: songs.value,
       lrcType: 3,
       theme: '#2980b9',
-      loop: 'all',
-      order: 'list',
+      loop: savedSettings.loop,
+      order: savedSettings.order,
       preload: 'auto',
-      volume: 0.7,
+      volume: savedSettings.volume,
       mutex: false,
-      listFolded: false,
+      listFolded: savedSettings.listFolded,
       listMaxHeight: '200px',
       width: '300px'
     })
@@ -264,6 +290,24 @@ onMounted(() => {
     
     aplayer.value.on('listswitch', (e) => {
       saveMusicIndex(e.index)
+    })
+    
+    const currentSettings = { ...savedSettings }
+    aplayer.value.on('volumechange', () => {
+      currentSettings.volume = aplayer.value.volume
+      saveAPlayerSettings(currentSettings)
+    })
+    aplayer.value.on('loopchange', () => {
+      currentSettings.loop = aplayer.value.loop
+      saveAPlayerSettings(currentSettings)
+    })
+    aplayer.value.on('orderchange', () => {
+      currentSettings.order = aplayer.value.order
+      saveAPlayerSettings(currentSettings)
+    })
+    aplayer.value.on('listfoldchange', () => {
+      currentSettings.listFolded = aplayer.value.listFolded
+      saveAPlayerSettings(currentSettings)
     })
     
     // 设置播放器样式
@@ -279,6 +323,41 @@ onMounted(() => {
     }
     aplayerInitialized.value = true
     setAPlayerInstance(aplayer.value)
+    
+    const handleMediaKeys = (e) => {
+      if (!aplayer.value) return
+      const activeElement = document.activeElement
+      const isInput = activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.isContentEditable
+      if (e.key === 'MediaTrackNext' || e.code === 'MediaTrackNext') {
+        e.preventDefault()
+        aplayer.value.skipForward()
+      } else if (e.key === 'MediaTrackPrevious' || e.code === 'MediaTrackPrevious') {
+        e.preventDefault()
+        aplayer.value.skipBack()
+      } else if (e.key === 'MediaPlayPause' || e.code === 'MediaPlayPause') {
+        e.preventDefault()
+        aplayer.value.toggle()
+      } else if (e.code === 'Space' && !isInput) {
+        e.preventDefault()
+        aplayer.value.toggle()
+      }
+    }
+    window.addEventListener('keydown', handleMediaKeys)
+    
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        aplayer.value?.skipForward()
+      })
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        aplayer.value?.skipBack()
+      })
+      navigator.mediaSession.setActionHandler('play', () => {
+        aplayer.value?.play()
+      })
+      navigator.mediaSession.setActionHandler('pause', () => {
+        aplayer.value?.pause()
+      })
+    }
   }
   preloadAllVideos()
   setTimeout(() => {
