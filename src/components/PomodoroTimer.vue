@@ -113,39 +113,48 @@
                     <label>休息时间(分钟)</label>
                     <input type="number" v-model.number="breakDuration" min="1" max="30" :disabled="isRunning"/>
                   </div>
-                  <div class="setting-group">
-                    <label>专注结束时暂停音乐</label>
-                    <label class="toggle-switch">
-                      <input type="checkbox" v-model="pauseMusicOnFocusEnd" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
-                      <span class="toggle-slider"></span>
-                    </label>
+                  <div class="pomodoro-count">
+                    <span class="count-label">已完成番茄:</span>
+                    <div class="count-display">
+                      <span v-for="i in 4" :key="i" class="pomodoro-dot" :class="{ filled: completedPomodoros >= i }"></span>
+                    </div>
                   </div>
-                  <div class="setting-group">
-                    <label>休息结束时暂停音乐</label>
-                    <label class="toggle-switch">
-                      <input type="checkbox" v-model="pauseMusicOnBreakEnd" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
-                      <span class="toggle-slider"></span>
-                    </label>
-                  </div>
-                  <div class="setting-group">
-                    <label>无操作隐藏番茄钟</label>
-                    <label class="toggle-switch">
-                      <input type="checkbox" v-model="hidePomodoroOnIdle" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
-                      <span class="toggle-slider"></span>
-                    </label>
-                  </div>
-                  <div class="setting-group">
-                    <label>显示一言（测试）</label>
-                    <label class="toggle-switch">
-                      <input type="checkbox" v-model="showHitokoto" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
-                      <span class="toggle-slider"></span>
-                    </label>
-                  </div>
-                </div>
-                <div class="pomodoro-count">
-                  <span class="count-label">已完成番茄:</span>
-                  <div class="count-display">
-                    <span v-for="i in 4" :key="i" class="pomodoro-dot" :class="{ filled: completedPomodoros >= i }"></span>
+                  <div class="toggle-grid">
+                    <div class="toggle-item">
+                      <label>专注结束暂停音乐</label>
+                      <label class="toggle-switch">
+                        <input type="checkbox" v-model="pauseMusicOnFocusEnd" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
+                    <div class="toggle-item">
+                      <label>休息结束暂停音乐</label>
+                      <label class="toggle-switch">
+                        <input type="checkbox" v-model="pauseMusicOnBreakEnd" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
+                    <div class="toggle-item">
+                      <label>无操作隐藏番茄钟</label>
+                      <label class="toggle-switch">
+                        <input type="checkbox" v-model="hidePomodoroOnIdle" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
+                    <div class="toggle-item">
+                      <label>显示一言</label>
+                      <label class="toggle-switch">
+                        <input type="checkbox" v-model="showHitokoto" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
+                    <div class="toggle-item">
+                      <label>歌曲平滑过渡（测试）</label>
+                      <label class="toggle-switch">
+                        <input type="checkbox" v-model="crossfadeEnabled" @change="toggleCrossfade(crossfadeEnabled)"/>
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -301,6 +310,7 @@ import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { useOnlineCount } from '../composables/useOnlineCount.js'
 import { useMusic } from '../composables/useMusic.js'
 import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
+import { useCrossfade } from '../composables/useCrossfade.js'
 import { getPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings } from '../utils/userSettings.js'
 import { recommendPlaylists, LATEST_PLAYLIST_VERSION } from '../data/playlists.js'
 import { LATEST_UPDATE_VERSION } from '../data/updates.js'
@@ -336,6 +346,7 @@ const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_
 
 const { token, username, isLoggedIn, login, logout, isTokenExpired } = useStudyAuth()
 const { syncStatus, lastSyncTime, conflictData, syncOnLogin, resolveConflict, pushData } = useStudySync()
+const { crossfadeEnabled, toggleCrossfade } = useCrossfade()
 
 const showConflictModal = ref(false)
 
@@ -818,6 +829,9 @@ const handleVisibilityChange = () => {
 .reset-btn { background: rgba(244, 67, 54, 0.3); border-color: rgba(244, 67, 54, 0.5); }
 .btn-icon { font-size: 1rem; }
 .timer-settings { margin-bottom: 1rem; }
+.toggle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; margin-top: 0.5rem; }
+.toggle-item { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; padding: 0.3rem 0; }
+.toggle-item label:first-child { opacity: 0.8; white-space: nowrap; }
 .setting-group { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; font-size: 0.8rem; }
 .setting-group label { opacity: 0.8; }
 .setting-group input[type="number"] { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 0.2rem 0.4rem; color: white; width: 50px; text-align: center; }

@@ -52,6 +52,7 @@ import { useFullscreen } from '@vueuse/core'
 import { loadScript, loadStyle, preloadVideos } from './utils/cache.js'
 import { setAPlayerInstance, setHoveringUI, isHoveringUI } from './utils/eventBus.js'
 import { useMusic } from './composables/useMusic.js'
+import { useCrossfade } from './composables/useCrossfade.js'
 import { getVideoIndex, saveVideoIndex, getMusicIndex, saveMusicIndex } from './utils/userSettings.js'
 import PomodoroTimer from './components/PomodoroTimer.vue'
 import AnnouncementModal from './components/AnnouncementModal.vue'
@@ -177,6 +178,7 @@ const switchVideo = () => {
 const aplayer = ref(null)
 const aplayerInitialized = ref(false)
 const { songs, loadSongs, loading } = useMusic()
+const { setupCrossfade } = useCrossfade()
 
 let videoStalledTimer = null
 const onVideoLoaded = () => {
@@ -323,6 +325,7 @@ onMounted(() => {
     }
     aplayerInitialized.value = true
     setAPlayerInstance(aplayer.value)
+    setupCrossfade(aplayer.value)
     
     const handleMediaKeys = (e) => {
       if (!aplayer.value) return
