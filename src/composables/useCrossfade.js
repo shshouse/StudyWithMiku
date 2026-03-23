@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-const CROSSFADE_DURATION = 10
+const CROSSFADE_DURATION = 6
 const CROSSFADE_KEY = 'crossfade_enabled'
 
 const crossfadeEnabled = ref(localStorage.getItem(CROSSFADE_KEY) !== 'false')
@@ -188,7 +188,7 @@ export const useCrossfade = () => {
 
       ap.audio.volume = Math.max(0, targetVolume * (1 - ease))
       if (crossfadeAudio) {
-        crossfadeAudio.volume = Math.min(targetVolume, targetVolume * ease)
+        crossfadeAudio.volume = targetVolume * (0.5 + 0.5 * ease)
       }
 
       if (progress < 1) {
