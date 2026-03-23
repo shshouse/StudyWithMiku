@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-const CROSSFADE_DURATION = 5
+const CROSSFADE_DURATION = 10
 const CROSSFADE_KEY = 'crossfade_enabled'
 
 const crossfadeEnabled = ref(localStorage.getItem(CROSSFADE_KEY) !== 'false')
