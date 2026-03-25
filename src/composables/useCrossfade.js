@@ -11,11 +11,8 @@ let isCrossfading = false
 let targetVolume = 0.7
 let crossfadeNextIndex = -1
 let origTrigger = null
-let tempTakeover = false
-let tempTakeoverAudio = null
-let tempSyncRafId = null
-let origSeek = null
-let takeoverAp = null
+let handoffAudio = null
+let isHandingOff = false
 let preloadedAudioEl = null
 let preloadedForIndex = -1
 
@@ -33,23 +30,12 @@ export const useCrossfade = () => {
     }
   }
 
-  const stopTempTakeover = () => {
-    if (tempSyncRafId) {
-      cancelAnimationFrame(tempSyncRafId)
-      tempSyncRafId = null
+  const destroyHandoffAudio = () => {
+    if (handoffAudio) {
+      handoffAudio.pause()
+      handoffAudio.src = ''
+      handoffAudio = null
     }
-    if (tempTakeoverAudio) {
-      tempTakeoverAudio.pause()
-      tempTakeoverAudio.src = ''
-      tempTakeoverAudio = null
-    }
-    if (origSeek && takeoverAp) {
-      takeoverAp.seek = origSeek
-      delete takeoverAp.duration
-      origSeek = null
-      takeoverAp = null
-    }
-    tempTakeover = false
   }
 
   const cleanup = (ap) => {
@@ -58,7 +44,8 @@ export const useCrossfade = () => {
       crossfadeAnimationId = null
     }
     destroyCrossfadeAudio()
-    stopTempTakeover()
+    destroyHandoffAudio()
+    isHandingOff = false
     if (ap) ap.audio.volume = targetVolume
     isCrossfading = false
     crossfadeNextIndex = -1
@@ -84,18 +71,13 @@ export const useCrossfade = () => {
     }
   }
 
-  const formatTime = (s) => {
-    const m = Math.floor(s / 60)
-    const sec = Math.floor(s % 60)
-    return (m < 10 ? '0' + m : m) + ':' + (sec < 10 ? '0' + sec : sec)
-  }
-
   const handleCrossfadeEnd = (ap) => {
     const nextIdx = crossfadeNextIndex
     if (nextIdx === -1 || !crossfadeAudio) {
       cleanup(ap)
       return
     }
+
     const tempAudio = crossfadeAudio
     crossfadeAudio = null
     isCrossfading = false
@@ -107,50 +89,31 @@ export const useCrossfade = () => {
       crossfadeAnimationId = null
     }
     restoreTrigger(ap)
-    const origSetAudio = ap.setAudio
-    ap.setAudio = () => {}
+
+    isHandingOff = true
+    ap.audio.volume = 0
     ap.list.switch(nextIdx)
-    ap.setAudio = origSetAudio
-    ap.setUIPlaying()
-    tempTakeover = true
-    tempTakeoverAudio = tempAudio
-    takeoverAp = ap
-    origSeek = ap.seek.bind(ap)
-    ap.seek = (time) => {
-      if (tempTakeoverAudio) {
-        const dur = tempTakeoverAudio.duration
-        if (!isNaN(dur) && dur > 0) {
-          time = Math.max(0, Math.min(time, dur))
-          tempTakeoverAudio.currentTime = time
-        }
-      }
-    }
-    Object.defineProperty(ap, 'duration', {
-      get: () => {
-        if (tempTakeoverAudio && !isNaN(tempTakeoverAudio.duration)) return tempTakeoverAudio.duration
-        return isNaN(ap.audio.duration) ? 0 : ap.audio.duration
-      },
-      configurable: true
-    })
-    const syncUI = () => {
-      if (!tempTakeover || !tempTakeoverAudio) return
-      const t = tempTakeoverAudio
-      if (!isNaN(t.duration) && t.duration > 0) {
-        ap.bar.set('played', t.currentTime / t.duration, 'width')
-        ap.template.ptime.innerHTML = formatTime(t.currentTime)
-        ap.template.dtime.innerHTML = formatTime(t.duration)
-        if (ap.lrc) ap.lrc.update(t.currentTime)
-      }
-      tempSyncRafId = requestAnimationFrame(syncUI)
-    }
-    tempSyncRafId = requestAnimationFrame(syncUI)
-    tempAudio.addEventListener('ended', () => {
-      stopTempTakeover()
-      const nextNextIdx = ap.nextIndex()
-      ap.list.switch(nextNextIdx)
+    handoffAudio = tempAudio
+
+    const doHandoff = () => {
+      if (!handoffAudio) return
+      const pos = handoffAudio.currentTime
+      handoffAudio.pause()
+      handoffAudio.src = ''
+      handoffAudio = null
+      isHandingOff = false
+      ap.audio.currentTime = pos
       ap.audio.volume = targetVolume
       ap.play()
-    }, { once: true })
+    }
+    if (ap.audio.readyState >= 3) {
+      doHandoff()
+    } else {
+      ap.audio.addEventListener('canplay', doHandoff, { once: true })
+      setTimeout(() => {
+        if (handoffAudio) doHandoff()
+      }, 5000)
+    }
   }
 
   const startCrossfade = (ap) => {
@@ -202,7 +165,7 @@ export const useCrossfade = () => {
     let crossfadeTriggered = false
 
     ap.on('timeupdate', () => {
-      if (!crossfadeEnabled.value || isCrossfading || tempTakeover) return
+      if (!crossfadeEnabled.value || isCrossfading || handoffAudio) return
       const audio = ap.audio
       const remaining = audio.duration - audio.currentTime
       if (remaining <= 15 && remaining > CROSSFADE_DURATION + 1 && audio.duration > CROSSFADE_DURATION + 2 && !preloadedAudioEl) {
@@ -235,25 +198,22 @@ export const useCrossfade = () => {
     })
 
     ap.on('listswitch', () => {
-      if (tempTakeover) {
-        stopTempTakeover()
-        ap.audio.volume = targetVolume
-      } else if (isCrossfading) {
+      if (isCrossfading || handoffAudio) {
         cleanup(ap)
       }
       crossfadeTriggered = false
     })
 
     ap.on('pause', () => {
-      if (tempTakeover && tempTakeoverAudio) {
-        tempTakeoverAudio.pause()
-      }
+      if (isHandingOff) return
+      if (crossfadeAudio) crossfadeAudio.pause()
+      if (handoffAudio) handoffAudio.pause()
     })
 
     ap.on('play', () => {
-      if (tempTakeover && tempTakeoverAudio) {
-        tempTakeoverAudio.play().catch(() => {})
-      }
+      if (isHandingOff) return
+      if (crossfadeAudio) crossfadeAudio.play().catch(() => {})
+      if (handoffAudio) handoffAudio.play().catch(() => {})
     })
   }
 
