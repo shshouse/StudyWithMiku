@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-const CROSSFADE_DURATION = 6
+const CROSSFADE_DURATION = 5
 const CROSSFADE_KEY = 'crossfade_enabled'
 
 const crossfadeEnabled = ref(localStorage.getItem(CROSSFADE_KEY) !== 'false')
@@ -95,24 +95,32 @@ export const useCrossfade = () => {
     ap.list.switch(nextIdx)
     handoffAudio = tempAudio
 
-    const doHandoff = () => {
+    const finishHandoff = () => {
       if (!handoffAudio) return
-      const pos = handoffAudio.currentTime
+      ap.audio.volume = targetVolume
       handoffAudio.pause()
       handoffAudio.src = ''
       handoffAudio = null
       isHandingOff = false
-      ap.audio.currentTime = pos
-      ap.audio.volume = targetVolume
       ap.play()
     }
+
+    const doSeekAndHandoff = () => {
+      if (!handoffAudio) return
+      ap.audio.currentTime = handoffAudio.currentTime
+      if (!ap.audio.seeking) {
+        finishHandoff()
+      } else {
+        ap.audio.addEventListener('seeked', finishHandoff, { once: true })
+        setTimeout(() => finishHandoff(), 3000)
+      }
+    }
+
     if (ap.audio.readyState >= 3) {
-      doHandoff()
+      doSeekAndHandoff()
     } else {
-      ap.audio.addEventListener('canplay', doHandoff, { once: true })
-      setTimeout(() => {
-        if (handoffAudio) doHandoff()
-      }, 5000)
+      ap.audio.addEventListener('canplay', doSeekAndHandoff, { once: true })
+      setTimeout(() => finishHandoff(), 5000)
     }
   }
 
