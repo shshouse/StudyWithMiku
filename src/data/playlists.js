@@ -25,11 +25,19 @@ export const recommendPlaylists = [
   },
   {
     id: '4',
-    name: '阿氏圆的古典歌单',
+    name: '古典歌单',
     desc: '希望可以让更多人了解古典音乐',
     platform: 'tencent',
     playlistId: '1158585431',
-    tags: ['古典', '纯音乐']
+    tags: ['古典', '纯音乐','By 阿氏圆']
+  },
+  {
+    id: '5',
+    name: 'ACG睡眠曲目',
+    desc: '让我们回忆一下，纯音乐的味道，静下心，慢慢合上双眼，享受吧！',
+    platform: 'netease',
+    playlistId: '2663460452',
+    tags: ['轻音乐','ACG','By 永生']
   },
 ]
 

@@ -1,5 +1,14 @@
 export const updates = [
     {
+    date: '2026-3-26',
+    content: [
+      '一言+2',
+      '感谢 spring 十字斛科 Siada.的投稿',
+      '歌单+1',
+      '感谢永生的投稿',
+    ]
+    },  
+    {
     date: '2026-3-22',
     content: [
       '1.新增Siada.的一言投稿',
