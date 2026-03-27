@@ -46,11 +46,11 @@
           <div class="settings-body">
             <div class="settings-nav">
               <button class="nav-item" :class="{ active: currentTab === 'pomodoro' }" @click="currentTab = 'pomodoro'">番茄钟</button>
+              <button class="nav-item" :class="{ active: currentTab === 'calendar' }" @click="currentTab = 'calendar'">学习日历</button>
               <button class="nav-item" :class="{ active: currentTab === 'todos' }" @click="currentTab = 'todos'">待办列表</button>
               <button class="nav-item" :class="{ active: currentTab === 'playlist' }" @click="openPlaylistTab">歌单<span v-if="hasNewPlaylist" class="update-dot"></span></button>
               <button class="nav-item" :class="{ active: currentTab === 'stats' }" @click="currentTab = 'stats'">学习数据</button>
               <button class="nav-item" :class="{ active: currentTab === 'updates' }" @click="openUpdatesTab">更新日志<span v-if="hasNewUpdate" class="update-dot"></span></button>
-              <button class="nav-item" :class="{ active: currentTab === 'quickstudy' }" @click="currentTab = 'quickstudy'">一键学习</button>
               <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="currentTab = 'about'">关于</button>
             </div>
             <div class="settings-content">
@@ -230,12 +230,10 @@
                 <Updates />
               </div>
 
-              <div v-else-if="currentTab === 'quickstudy'" class="quickstudy-container">
-                <div class="quickstudy-content">
-                  <p>更换为exe格式，比url更好看＞﹏＜</p>
-                  <a class="quickstudy-link" href="https://pan.quark.cn/s/f89e455f54b4" target="_blank" rel="noopener noreferrer">一键开始学习</a>
-                </div>
+              <div v-else-if="currentTab === 'calendar'" key="calendar">
+                <StudyCalendar />
               </div>
+
 
               <div v-else-if="currentTab === 'about'" class="about-container">
                 <div class="about-content">
@@ -316,8 +314,10 @@ import { recommendPlaylists, LATEST_PLAYLIST_VERSION } from '../data/playlists.j
 import { LATEST_UPDATE_VERSION } from '../data/updates.js'
 import { getRandomQuote } from '../data/quotes.js'
 import Updates from './Updates.vue'
+import StudyCalendar from './StudyCalendar.vue'
 import { useStudyAuth } from '../composables/useStudyAuth.js'
 import { useStudySync } from '../composables/useStudySync.js'
+import { useCalendar } from '../composables/useCalendar.js'
 
 const UPDATE_READ_KEY = 'last_read_update'
 const PLAYLIST_READ_KEY = 'last_read_playlist'
@@ -347,6 +347,7 @@ const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_
 const { token, username, isLoggedIn, login, logout, isTokenExpired } = useStudyAuth()
 const { syncStatus, lastSyncTime, conflictData, syncOnLogin, resolveConflict, pushData } = useStudySync()
 const { crossfadeEnabled, toggleCrossfade } = useCrossfade()
+const { recordStudyTime: calendarRecordStudy, recordPomodoro: calendarRecordPomodoro } = useCalendar()
 
 const showConflictModal = ref(false)
 
@@ -398,7 +399,7 @@ const selectedPlatform = ref(platform.value)
 const currentTab = ref('pomodoro')
 const currentHitokoto = ref({ text: '', source: '' })
 const showHitokotoAnimation = ref(false)
-const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', todos: '待办列表', playlist: '歌单设置', stats: '学习数据', updates: '更新日志', quickstudy: '一键学习', about: '关于' }[currentTab.value]))
+const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', calendar: '学习日历', todos: '待办列表', playlist: '歌单设置', stats: '学习数据', updates: '更新日志', about: '关于' }[currentTab.value]))
 
 const TODOS_KEY = 'study_todos'
 const SHOW_TODO_KEY = 'show_todo_on_clock'
@@ -473,8 +474,8 @@ const loadStats = () => {
 }
 const studyStats = reactive(loadStats())
 const saveStats = (sync = true) => { localStorage.setItem(STATS_KEY, JSON.stringify(studyStats)); if (sync) triggerSync() }
-const addStudyTime = (seconds) => { studyStats.totalStudyTime += seconds; studyStats.todayStudyTime += seconds; saveStats() }
-const addPomodoro = () => { studyStats.totalPomodoros++; studyStats.todayPomodoros++; saveStats() }
+const addStudyTime = (seconds) => { studyStats.totalStudyTime += seconds; studyStats.todayStudyTime += seconds; saveStats(); calendarRecordStudy(seconds) }
+const addPomodoro = () => { studyStats.totalPomodoros++; studyStats.todayPomodoros++; saveStats(); calendarRecordPomodoro() }
 const resetStats = () => { studyStats.totalStudyTime = 0; studyStats.totalPomodoros = 0; studyStats.todayStudyTime = 0; studyStats.todayPomodoros = 0; studyStats.lastDate = getToday(); saveStats() }
 const formatStudyTime = (seconds) => { const h = Math.floor(seconds / 3600); const m = Math.floor((seconds % 3600) / 60); return h > 0 ? `${h}小时${m}分钟` : `${m}分钟` }
 
@@ -985,11 +986,7 @@ const handleVisibilityChange = () => {
   .about-link { width: 100%; max-width: 250px; }
 }
 
-.quickstudy-container { color: white; padding: 2rem 0; text-align: center; }
-.quickstudy-content { max-width: 400px; margin: 0 auto; }
-.quickstudy-content p { margin-bottom: 1.5rem; font-size: 0.9rem; opacity: 0.9; }
-.quickstudy-link { display: inline-block; padding: 1rem 2rem; background: rgba(76, 175, 80, 0.3); border: 1px solid rgba(76, 175, 80, 0.5); border-radius: 10px; color: white; text-decoration: none; font-size: 1rem; font-weight: 500; transition: all 0.3s ease; }
-.quickstudy-link:hover { background: rgba(76, 175, 80, 0.5); transform: translateY(-2px); }
+
 
 .user-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
 .sync-status { display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.6rem; border-radius: 12px; background: rgba(0, 0, 0, 0.2); font-size: 0.8rem; }

@@ -28,7 +28,7 @@ export const recommendPlaylists = [
     name: '古典歌单',
     desc: '希望可以让更多人了解古典音乐',
     platform: 'tencent',
-    playlistId: '1158585431',
+    playlistId: '9515739794',
     tags: ['古典', '纯音乐','By 阿氏圆']
   },
   {
