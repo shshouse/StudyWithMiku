@@ -97,14 +97,14 @@ export function useCalendar() {
   const getDayLog = (dateStr) => dailyLog.value[dateStr] || { studyTime: 0, pomodoros: 0 }
   const getDayPlans = (dateStr) => plans.value[dateStr] || []
 
-  // 热力图等级 0-4，基于当天计划数量
+  // 热力图等级 0-4，基于当天学习时间
   const getHeatLevel = (dateStr) => {
-    const planList = getDayPlans(dateStr)
-    const count = planList.length
-    if (count === 0) return 0
-    if (count === 1) return 1
-    if (count === 2) return 2
-    if (count === 3) return 3
+    const log = getDayLog(dateStr)
+    const time = log.studyTime || 0
+    if (time === 0) return 0
+    if (time < 3600) return 1
+    if (time < 7200) return 2
+    if (time < 14400) return 3
     return 4
   }
 

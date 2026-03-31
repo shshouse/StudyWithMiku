@@ -144,7 +144,7 @@ export const useCrossfade = () => {
       crossfadeAudio.preload = 'auto'
     }
     crossfadeAudio.volume = 0
-    crossfadeAudio.play().catch(() => {})
+    crossfadeAudio.play().catch(() => { })
 
     const startTime = Date.now()
     const duration = CROSSFADE_DURATION * 1000
@@ -220,8 +220,8 @@ export const useCrossfade = () => {
 
     ap.on('play', () => {
       if (isHandingOff) return
-      if (crossfadeAudio) crossfadeAudio.play().catch(() => {})
-      if (handoffAudio) handoffAudio.play().catch(() => {})
+      if (crossfadeAudio) crossfadeAudio.play().catch(() => { })
+      if (handoffAudio) handoffAudio.play().catch(() => { })
     })
   }
 

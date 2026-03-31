@@ -67,6 +67,65 @@ export function useStudySync() {
         }
     }
 
+    // === 日历同步 ===
+
+    const fetchCalendar = async () => {
+        if (!isLoggedIn.value) return null
+
+        try {
+            const res = await fetch(`${MIKUMOD_API}/api/study/calendar`, {
+                headers: getAuthHeaders(),
+            })
+
+            if (res.status === 401) { logout(); return null }
+            if (!res.ok) return null
+
+            const result = await res.json()
+            return result.data
+        } catch (error) {
+            console.error('Fetch calendar error:', error)
+            return null
+        }
+    }
+
+    const pushCalendar = async (dailyLog, plans) => {
+        if (!isLoggedIn.value) return false
+
+        try {
+            const res = await fetch(`${MIKUMOD_API}/api/study/calendar`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ dailyLog, plans }),
+            })
+
+            if (res.status === 401) { logout(); return false }
+            if (!res.ok) return false
+            return true
+        } catch (error) {
+            console.error('Push calendar error:', error)
+            return false
+        }
+    }
+
+    const pushAll = async (stats, todos, settings, calendarData) => {
+        if (!isLoggedIn.value) return false
+
+        syncStatus.value = 'syncing'
+        try {
+            const [dataOk, calOk] = await Promise.all([
+                pushData(stats, todos, settings),
+                calendarData ? pushCalendar(calendarData.dailyLog, calendarData.plans) : Promise.resolve(true),
+            ])
+
+            syncStatus.value = (dataOk && calOk) ? 'done' : 'error'
+            if (dataOk && calOk) lastSyncTime.value = new Date()
+            return dataOk && calOk
+        } catch {
+            syncStatus.value = 'error'
+            return false
+        }
+    }
+
     const syncOnLogin = async (localStats, localTodos, localSettings) => {
         const remoteData = await fetchRemoteData()
 
@@ -127,6 +186,9 @@ export function useStudySync() {
         conflictData,
         fetchRemoteData,
         pushData,
+        pushCalendar,
+        fetchCalendar,
+        pushAll,
         syncOnLogin,
         resolveConflict,
     }

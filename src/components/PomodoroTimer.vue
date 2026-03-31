@@ -45,11 +45,10 @@
           </div>
           <div class="settings-body">
             <div class="settings-nav">
-              <button class="nav-item" :class="{ active: currentTab === 'pomodoro' }" @click="currentTab = 'pomodoro'">番茄钟</button>
-              <button class="nav-item" :class="{ active: currentTab === 'calendar' }" @click="currentTab = 'calendar'">学习日历</button>
+              <button class="nav-item" :class="{ active: currentTab === 'calendar' }" @click="currentTab = 'calendar'">学习数据</button>
               <button class="nav-item" :class="{ active: currentTab === 'todos' }" @click="currentTab = 'todos'">待办列表</button>
               <button class="nav-item" :class="{ active: currentTab === 'playlist' }" @click="openPlaylistTab">歌单<span v-if="hasNewPlaylist" class="update-dot"></span></button>
-              <button class="nav-item" :class="{ active: currentTab === 'stats' }" @click="currentTab = 'stats'">学习数据</button>
+              <button class="nav-item" :class="{ active: currentTab === 'sync' }" @click="currentTab = 'sync'">同步</button>
               <button class="nav-item" :class="{ active: currentTab === 'updates' }" @click="openUpdatesTab">更新日志<span v-if="hasNewUpdate" class="update-dot"></span></button>
               <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="currentTab = 'about'">关于</button>
             </div>
@@ -200,7 +199,7 @@
                 </div>
               </div>
 
-              <div v-else-if="currentTab === 'stats'" class="stats-container">
+              <div v-else-if="currentTab === 'sync'" class="sync-container">
                 <div class="login-section">
                   <template v-if="!isLoggedIn">
                     <p class="login-hint">登录MikuMod账号后可云端同步学习数据</p>
@@ -220,17 +219,19 @@
                     </div>
                   </template>
                 </div>
-                <div class="stat-item"><span class="stat-label">总学习时长</span><span class="stat-value">{{ formatStudyTime(studyStats.totalStudyTime) }}</span></div>
-                <div class="stat-item"><span class="stat-label">完成番茄数</span><span class="stat-value">{{ studyStats.totalPomodoros }}</span></div>
-                <div class="stat-item"><span class="stat-label">今日学习</span><span class="stat-value">{{ formatStudyTime(studyStats.todayStudyTime) }}</span></div>
-                <div class="stat-item"><span class="stat-label">今日番茄</span><span class="stat-value">{{ studyStats.todayPomodoros }}</span></div>
               </div>
 
               <div v-else-if="currentTab === 'updates'">
                 <Updates />
               </div>
 
-              <div v-else-if="currentTab === 'calendar'" key="calendar">
+              <div v-else-if="currentTab === 'calendar'" key="calendar" class="calendar-data-container">
+                <div class="main-stats-grid">
+                  <div class="stat-item"><span class="stat-label">总学习时长: </span><span class="stat-value">{{ formatStudyTime(studyStats.totalStudyTime) }}</span></div>
+                  <div class="stat-item"><span class="stat-label">完成番茄数: </span><span class="stat-value">{{ studyStats.totalPomodoros }}</span></div>
+                  <div class="stat-item"><span class="stat-label">今日学习: </span><span class="stat-value">{{ formatStudyTime(studyStats.todayStudyTime) }}</span></div>
+                  <div class="stat-item"><span class="stat-label">今日番茄: </span><span class="stat-value">{{ studyStats.todayPomodoros }}</span></div>
+                </div>
                 <StudyCalendar />
               </div>
 
@@ -345,9 +346,9 @@ const { onlineCount, isConnected } = useOnlineCount(import.meta.env.VITE_WS_URL)
 const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS } = useMusic()
 
 const { token, username, isLoggedIn, login, logout, isTokenExpired } = useStudyAuth()
-const { syncStatus, lastSyncTime, conflictData, syncOnLogin, resolveConflict, pushData } = useStudySync()
+const { syncStatus, lastSyncTime, conflictData, syncOnLogin, resolveConflict, pushData, pushCalendar, fetchCalendar, pushAll } = useStudySync()
 const { crossfadeEnabled, toggleCrossfade } = useCrossfade()
-const { recordStudyTime: calendarRecordStudy, recordPomodoro: calendarRecordPomodoro } = useCalendar()
+const { recordStudyTime: calendarRecordStudy, recordPomodoro: calendarRecordPomodoro, getCalendarData, setCalendarData } = useCalendar()
 
 const showConflictModal = ref(false)
 
@@ -367,13 +368,13 @@ const triggerSync = () => {
   if (!isLoggedIn.value) return
   if (pushTimeout) clearTimeout(pushTimeout)
   pushTimeout = setTimeout(() => {
-    pushData(studyStats, todos.value, getPomodoroSettings())
+    pushAll(studyStats, todos.value, getPomodoroSettings(), getCalendarData())
   }, 2000)
 }
 
-const manualSync = () => {
+const manualSync = async () => {
   if (!isLoggedIn.value) return
-  pushData(studyStats, todos.value, getPomodoroSettings())
+  await pushAll(studyStats, todos.value, getPomodoroSettings(), getCalendarData())
 }
 
 const handleResolveConflict = async (choice, remoteDataObj = null) => {
@@ -399,7 +400,7 @@ const selectedPlatform = ref(platform.value)
 const currentTab = ref('pomodoro')
 const currentHitokoto = ref({ text: '', source: '' })
 const showHitokotoAnimation = ref(false)
-const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', calendar: '学习日历', todos: '待办列表', playlist: '歌单设置', stats: '学习数据', updates: '更新日志', about: '关于' }[currentTab.value]))
+const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', calendar: '学习数据', todos: '待办列表', playlist: '歌单设置', sync: '同步', updates: '更新日志', about: '关于' }[currentTab.value]))
 
 const TODOS_KEY = 'study_todos'
 const SHOW_TODO_KEY = 'show_todo_on_clock'
@@ -680,6 +681,38 @@ onMounted(async () => {
     } else if (applyRemote) {
       await handleResolveConflict('remote', applyRemote)
     }
+    const remoteCalendar = await fetchCalendar()
+    if (remoteCalendar) {
+      const local = getCalendarData()
+      const allDates = new Set([...Object.keys(remoteCalendar.dailyLog || {}), ...Object.keys(local.dailyLog || {})])
+      const mergedLog = {}
+      for (const date of allDates) {
+        const r = remoteCalendar.dailyLog?.[date] || { studyTime: 0, pomodoros: 0 }
+        const l = local.dailyLog?.[date] || { studyTime: 0, pomodoros: 0 }
+        mergedLog[date] = {
+          studyTime: Math.max(r.studyTime || 0, l.studyTime || 0),
+          pomodoros: Math.max(r.pomodoros || 0, l.pomodoros || 0),
+        }
+      }
+      const allPlanDates = new Set([...Object.keys(remoteCalendar.plans || {}), ...Object.keys(local.plans || {})])
+      const mergedPlans = {}
+      for (const date of allPlanDates) {
+        const rPlans = remoteCalendar.plans?.[date] || []
+        const lPlans = local.plans?.[date] || []
+        const seen = new Set()
+        mergedPlans[date] = []
+        for (const p of [...lPlans, ...rPlans]) {
+          if (!seen.has(p.id)) { seen.add(p.id); mergedPlans[date].push(p) }
+        }
+      }
+      setCalendarData({ dailyLog: mergedLog, plans: mergedPlans })
+      pushCalendar(mergedLog, mergedPlans)
+    } else {
+      const local = getCalendarData()
+      if (Object.keys(local.dailyLog).length > 0 || Object.keys(local.plans).length > 0) {
+        pushCalendar(local.dailyLog, local.plans)
+      }
+    }
   }
 
   currentHitokoto.value = getRandomQuote()
@@ -913,6 +946,11 @@ const handleVisibilityChange = () => {
 .stat-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; margin-bottom: 0.8rem; background: rgba(255, 255, 255, 0.05); border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); }
 .stat-label { font-size: 0.9rem; opacity: 0.8; }
 .stat-value { font-size: 1.1rem; font-weight: 600; color: #ff6b6b; }
+
+.calendar-data-container { padding: 1rem 0; color: white; }
+.main-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8rem; margin-bottom: 1.5rem; }
+.main-stats-grid .stat-item { margin-bottom: 0; padding: 0.8rem; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+
 .reset-stats-btn { margin-top: 1rem; width: 100%; background: rgba(244, 67, 54, 0.3); border-color: rgba(244, 67, 54, 0.5); }
 
 @media (max-width: 768px) {
