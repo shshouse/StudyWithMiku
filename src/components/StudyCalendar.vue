@@ -42,7 +42,12 @@
         }"
         @click="selectDate(d.date)"
       >
-        <span class="day-number">{{ d.day }}</span>
+        <div class="day-content">
+          <span class="day-number">{{ d.day }}</span>
+          <span v-if="getDayLog(d.date).studyTime >= 60" class="day-study-time">
+            {{ formatTime(getDayLog(d.date).studyTime) }}
+          </span>
+        </div>
       </div>
     </div>
 
@@ -249,6 +254,7 @@ const formatTime = (seconds) => {
 .day-cell {
   aspect-ratio: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   border-radius: 6px;
@@ -256,6 +262,19 @@ const formatTime = (seconds) => {
   transition: all 0.2s ease;
   position: relative;
   font-size: 0.75rem;
+}
+
+.day-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.day-study-time {
+  font-size: 0.55rem;
+  opacity: 0.85;
+  margin-top: 2px;
+  white-space: nowrap;
 }
 
 .day-cell:hover {

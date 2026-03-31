@@ -4,8 +4,7 @@ const defaultSettings = {
   pomodoro: {
     focusDuration: 25,
     breakDuration: 5,
-    pauseMusicOnFocusEnd: false,
-    pauseMusicOnBreakEnd: false,
+    pauseMusicDuringBreak: true,
     hidePomodoroOnIdle: false,
     showHitokoto: true,
   },
@@ -39,9 +38,9 @@ export const saveSettings = (settings) => {
   }
 }
 
-export const savePomodoroSettings = (focusDuration, breakDuration, pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto) => {
+export const savePomodoroSettings = (focusDuration, breakDuration, pauseMusicDuringBreak, hidePomodoroOnIdle, showHitokoto) => {
   const settings = getSettings()
-  settings.pomodoro = { focusDuration, breakDuration, pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto }
+  settings.pomodoro = { focusDuration, breakDuration, pauseMusicDuringBreak, hidePomodoroOnIdle, showHitokoto }
   saveSettings(settings)
 }
 
@@ -49,10 +48,9 @@ export const getPomodoroSettings = () => {
   return getSettings().pomodoro
 }
 
-export const saveMusicPauseSettings = (pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto) => {
+export const saveMusicPauseSettings = (pauseMusicDuringBreak, hidePomodoroOnIdle, showHitokoto) => {
   const settings = getSettings()
-  settings.pomodoro.pauseMusicOnFocusEnd = pauseMusicOnFocusEnd
-  settings.pomodoro.pauseMusicOnBreakEnd = pauseMusicOnBreakEnd
+  settings.pomodoro.pauseMusicDuringBreak = pauseMusicDuringBreak
   settings.pomodoro.hidePomodoroOnIdle = hidePomodoroOnIdle
   settings.pomodoro.showHitokoto = showHitokoto
   saveSettings(settings)

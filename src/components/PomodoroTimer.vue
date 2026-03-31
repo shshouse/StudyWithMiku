@@ -45,10 +45,11 @@
           </div>
           <div class="settings-body">
             <div class="settings-nav">
-              <button class="nav-item" :class="{ active: currentTab === 'calendar' }" @click="currentTab = 'calendar'">学习数据</button>
+              <button class="nav-item" :class="{ active: currentTab === 'pomodoro' }" @click="currentTab = 'pomodoro'">番茄钟</button>
+              <button class="nav-item" :class="{ active: currentTab === 'calendar' }" @click="currentTab = 'calendar'">学习日历</button>
               <button class="nav-item" :class="{ active: currentTab === 'todos' }" @click="currentTab = 'todos'">待办列表</button>
               <button class="nav-item" :class="{ active: currentTab === 'playlist' }" @click="openPlaylistTab">歌单<span v-if="hasNewPlaylist" class="update-dot"></span></button>
-              <button class="nav-item" :class="{ active: currentTab === 'sync' }" @click="currentTab = 'sync'">同步</button>
+              <button class="nav-item" :class="{ active: currentTab === 'sync' }" @click="currentTab = 'sync'">云同步</button>
               <button class="nav-item" :class="{ active: currentTab === 'updates' }" @click="openUpdatesTab">更新日志<span v-if="hasNewUpdate" class="update-dot"></span></button>
               <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="currentTab = 'about'">关于</button>
             </div>
@@ -120,30 +121,23 @@
                   </div>
                   <div class="toggle-grid">
                     <div class="toggle-item">
-                      <label>专注结束暂停音乐</label>
+                      <label>休息时暂停音乐</label>
                       <label class="toggle-switch">
-                        <input type="checkbox" v-model="pauseMusicOnFocusEnd" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
-                        <span class="toggle-slider"></span>
-                      </label>
-                    </div>
-                    <div class="toggle-item">
-                      <label>休息结束暂停音乐</label>
-                      <label class="toggle-switch">
-                        <input type="checkbox" v-model="pauseMusicOnBreakEnd" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
+                        <input type="checkbox" v-model="pauseMusicDuringBreak" @change="saveMusicPauseSettings(pauseMusicDuringBreak, hidePomodoroOnIdle, showHitokoto)"/>
                         <span class="toggle-slider"></span>
                       </label>
                     </div>
                     <div class="toggle-item">
                       <label>无操作隐藏番茄钟</label>
                       <label class="toggle-switch">
-                        <input type="checkbox" v-model="hidePomodoroOnIdle" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
+                        <input type="checkbox" v-model="hidePomodoroOnIdle" @change="saveMusicPauseSettings(pauseMusicDuringBreak, hidePomodoroOnIdle, showHitokoto)"/>
                         <span class="toggle-slider"></span>
                       </label>
                     </div>
                     <div class="toggle-item">
                       <label>显示一言</label>
                       <label class="toggle-switch">
-                        <input type="checkbox" v-model="showHitokoto" @change="saveMusicPauseSettings(pauseMusicOnFocusEnd, pauseMusicOnBreakEnd, hidePomodoroOnIdle, showHitokoto)"/>
+                        <input type="checkbox" v-model="showHitokoto" @change="saveMusicPauseSettings(pauseMusicDuringBreak, hidePomodoroOnIdle, showHitokoto)"/>
                         <span class="toggle-slider"></span>
                       </label>
                     </div>
@@ -214,10 +208,25 @@
                       </div>
                     </div>
                     <div class="sync-actions">
-                      <button class="action-btn" @click="manualSync" :disabled="syncStatus === 'syncing'">数据同步</button>
+                      <button class="action-btn sync-btn" @click="manualSync" :disabled="syncStatus === 'syncing'">数据同步</button>
                       <button class="action-btn logout-btn" @click="logout">退出登录</button>
                     </div>
                   </template>
+                </div>
+                <div class="main-stats-grid sync-stats-grid">
+                  <div class="stat-item"><span class="stat-label">总学习时长</span><span class="stat-value">{{ formatStudyTime(studyStats.totalStudyTime) }}</span></div>
+                  <div class="stat-item"><span class="stat-label">完成番茄数</span><span class="stat-value">{{ studyStats.totalPomodoros }}</span></div>
+                  <div class="stat-item"><span class="stat-label">今日学习</span><span class="stat-value">{{ formatStudyTime(studyStats.todayStudyTime) }}</span></div>
+                  <div class="stat-item"><span class="stat-label">今日番茄</span><span class="stat-value">{{ studyStats.todayPomodoros }}</span></div>
+                </div>
+                <div class="sync-features">
+                  <p class="features-title">下面是可同步至云端的数据哦＞﹏＜</p>
+                  <div class="features-grid">
+                    <div class="feature-item"><span class="check-icon">✓</span>学习日历</div>
+                    <div class="feature-item"><span class="check-icon">✓</span>待办列表</div>
+                    <div class="feature-item"><span class="check-icon">✓</span>统计数据</div>
+                    <div class="feature-item"><span class="check-icon">✓</span>番茄钟设置</div>
+                  </div>
                 </div>
               </div>
 
@@ -226,12 +235,6 @@
               </div>
 
               <div v-else-if="currentTab === 'calendar'" key="calendar" class="calendar-data-container">
-                <div class="main-stats-grid">
-                  <div class="stat-item"><span class="stat-label">总学习时长: </span><span class="stat-value">{{ formatStudyTime(studyStats.totalStudyTime) }}</span></div>
-                  <div class="stat-item"><span class="stat-label">完成番茄数: </span><span class="stat-value">{{ studyStats.totalPomodoros }}</span></div>
-                  <div class="stat-item"><span class="stat-label">今日学习: </span><span class="stat-value">{{ formatStudyTime(studyStats.todayStudyTime) }}</span></div>
-                  <div class="stat-item"><span class="stat-label">今日番茄: </span><span class="stat-value">{{ studyStats.todayPomodoros }}</span></div>
-                </div>
                 <StudyCalendar />
               </div>
 
@@ -347,7 +350,7 @@ const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_
 
 const { token, username, isLoggedIn, login, logout, isTokenExpired } = useStudyAuth()
 const { syncStatus, lastSyncTime, conflictData, syncOnLogin, resolveConflict, pushData, pushCalendar, fetchCalendar, pushAll } = useStudySync()
-const { crossfadeEnabled, toggleCrossfade } = useCrossfade()
+const { crossfadeEnabled, toggleCrossfade, fadeMusicOut, fadeMusicIn } = useCrossfade()
 const { recordStudyTime: calendarRecordStudy, recordPomodoro: calendarRecordPomodoro, getCalendarData, setCalendarData } = useCalendar()
 
 const showConflictModal = ref(false)
@@ -383,11 +386,10 @@ const handleResolveConflict = async (choice, remoteDataObj = null) => {
     if (remote.stats) { Object.assign(studyStats, remote.stats); saveStats(false) }
     if (remote.todos) { todos.value = remote.todos; saveTodos(false) }
     if (remote.settings) {
-      savePomodoroSettings(remote.settings.focusDuration || 25, remote.settings.breakDuration || 5, remote.settings.pauseMusicOnFocusEnd || false, remote.settings.pauseMusicOnBreakEnd || false, remote.settings.hidePomodoroOnIdle || false, remote.settings.showHitokoto || false)
+      savePomodoroSettings(remote.settings.focusDuration || 25, remote.settings.breakDuration || 5, remote.settings.pauseMusicDuringBreak ?? false, remote.settings.hidePomodoroOnIdle || false, remote.settings.showHitokoto || false)
       focusDuration.value = remote.settings.focusDuration || 25
       breakDuration.value = remote.settings.breakDuration || 5
-      pauseMusicOnFocusEnd.value = remote.settings.pauseMusicOnFocusEnd || false
-      pauseMusicOnBreakEnd.value = remote.settings.pauseMusicOnBreakEnd || false
+      pauseMusicDuringBreak.value = remote.settings.pauseMusicDuringBreak ?? false
       hidePomodoroOnIdle.value = remote.settings.hidePomodoroOnIdle || false
       showHitokoto.value = remote.settings.showHitokoto || false
     }
@@ -502,8 +504,7 @@ const STATUS = { FOCUS: 'focus', BREAK: 'break', LONG_BREAK: 'longBreak' }
 const savedPomodoro = getPomodoroSettings()
 const focusDuration = ref(savedPomodoro.focusDuration)
 const breakDuration = ref(savedPomodoro.breakDuration)
-const pauseMusicOnFocusEnd = ref(savedPomodoro.pauseMusicOnFocusEnd || false)
-const pauseMusicOnBreakEnd = ref(savedPomodoro.pauseMusicOnBreakEnd || false)
+const pauseMusicDuringBreak = ref(savedPomodoro.pauseMusicDuringBreak ?? false)
 const hidePomodoroOnIdle = ref(savedPomodoro.hidePomodoroOnIdle || false)
 const showHitokoto = ref(savedPomodoro.showHitokoto || false)
 const timeLeft = ref(focusDuration.value * 60)
@@ -526,9 +527,9 @@ let phaseEndTime = null
 let lastRecordedTimeLeft = 0
 let hitokotoInterval = null
 
-watch(focusDuration, (newVal) => { if (currentStatus.value === STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(newVal, breakDuration.value, pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
-watch(breakDuration, (newVal) => { if (currentStatus.value !== STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(focusDuration.value, newVal, pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
-watch([pauseMusicOnFocusEnd, pauseMusicOnBreakEnd], () => { saveMusicPauseSettings(pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
+watch(focusDuration, (newVal) => { if (currentStatus.value === STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(newVal, breakDuration.value, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
+watch(breakDuration, (newVal) => { if (currentStatus.value !== STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(focusDuration.value, newVal, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
+watch([pauseMusicDuringBreak], () => { saveMusicPauseSettings(pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
 watch(hidePomodoroOnIdle, (newVal) => {
   if (newVal) {
     document.addEventListener('mousemove', handleGlobalMouseMove)
@@ -633,16 +634,16 @@ const handleTimerComplete = () => {
     addPomodoro()
     if (completedPomodoros.value % 4 === 0) { currentStatus.value = STATUS.LONG_BREAK; timeLeft.value = breakDuration.value * 60 * 2 }
     else { currentStatus.value = STATUS.BREAK; timeLeft.value = breakDuration.value * 60 }
-    if (pauseMusicOnFocusEnd.value) {
+    if (pauseMusicDuringBreak.value) {
       const ap = getAPlayerInstance()
-      if (ap) ap.pause()
+      if (ap) fadeMusicOut(ap, 2)
     }
   } else {
     currentStatus.value = STATUS.FOCUS
     timeLeft.value = focusDuration.value * 60
-    if (pauseMusicOnBreakEnd.value) {
+    if (pauseMusicDuringBreak.value) {
       const ap = getAPlayerInstance()
-      if (ap) ap.pause()
+      if (ap) fadeMusicIn(ap, null, 2)
     }
   }
   const statusTextMap = { [STATUS.FOCUS]: '专注', [STATUS.BREAK]: '休息', [STATUS.LONG_BREAK]: '长休' }
@@ -938,11 +939,16 @@ const handleVisibilityChange = () => {
 }
 
 
-.stats-container { color: white; padding: 1rem 0; }
+.stats-container, .sync-container { color: white; padding: 1rem 0; }
 .login-section { text-align: center; padding: 1rem; margin-bottom: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); }
 .login-hint { font-size: 0.85rem; color: rgba(255, 255, 255, 0.7); margin: 0 0 0.8rem 0; }
 .login-btn { background: rgba(57, 197, 187, 0.3); border-color: rgba(57, 197, 187, 0.5); width: auto; padding: 0.5rem 1.5rem; }
 .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.sync-btn { background: rgba(57, 197, 187, 0.3); border-color: rgba(57, 197, 187, 0.5); color: white !important; }
+.sync-btn:hover { background: rgba(57, 197, 187, 0.5); }
+.sync-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.logout-btn { background: rgba(244, 67, 54, 0.3); border-color: rgba(244, 67, 54, 0.5); color: white !important; }
+.logout-btn:hover { background: rgba(244, 67, 54, 0.5); }
 .stat-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; margin-bottom: 0.8rem; background: rgba(255, 255, 255, 0.05); border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); }
 .stat-label { font-size: 0.9rem; opacity: 0.8; }
 .stat-value { font-size: 1.1rem; font-weight: 600; color: #ff6b6b; }
@@ -950,6 +956,13 @@ const handleVisibilityChange = () => {
 .calendar-data-container { padding: 1rem 0; color: white; }
 .main-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8rem; margin-bottom: 1.5rem; }
 .main-stats-grid .stat-item { margin-bottom: 0; padding: 0.8rem; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+.sync-stats-grid { margin-bottom: 1rem; }
+
+.sync-features { padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); }
+.features-title { font-size: 0.85rem; color: rgba(255, 255, 255, 0.7); margin: 0 0 0.8rem 0; }
+.features-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
+.feature-item { font-size: 0.85rem; color: rgba(255, 255, 255, 0.9); display: flex; align-items: center; gap: 0.4rem; }
+.check-icon { color: #4ecdc4; font-weight: bold; }
 
 .reset-stats-btn { margin-top: 1rem; width: 100%; background: rgba(244, 67, 54, 0.3); border-color: rgba(244, 67, 54, 0.5); }
 
