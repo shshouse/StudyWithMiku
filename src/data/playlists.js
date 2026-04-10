@@ -39,6 +39,14 @@ export const recommendPlaylists = [
     playlistId: '2663460452',
     tags: ['轻音乐','ACG','By 永生']
   },
+  {
+    id: '6',
+    name: '白噪音歌单',
+    desc: '自然白噪音背景，适合学习',
+    platform: 'netease',
+    playlistId: '17889326270',
+    tags: ['轻音乐','白噪音','By 松灰酸']
+  },
 ]
 
 export const LATEST_PLAYLIST_VERSION = String(recommendPlaylists.length)

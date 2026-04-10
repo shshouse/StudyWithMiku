@@ -15,6 +15,7 @@ let handoffAudio = null
 let isHandingOff = false
 let preloadedAudioEl = null
 let preloadedForIndex = -1
+let fadeAnimationId = null
 
 export const useCrossfade = () => {
   const toggleCrossfade = (val) => {
@@ -38,6 +39,15 @@ export const useCrossfade = () => {
     }
   }
 
+  const destroyPreloadedAudio = () => {
+    if (preloadedAudioEl) {
+      preloadedAudioEl.pause()
+      preloadedAudioEl.src = ''
+      preloadedAudioEl = null
+      preloadedForIndex = -1
+    }
+  }
+
   const cleanup = (ap) => {
     if (crossfadeAnimationId) {
       cancelAnimationFrame(crossfadeAnimationId)
@@ -45,6 +55,7 @@ export const useCrossfade = () => {
     }
     destroyCrossfadeAudio()
     destroyHandoffAudio()
+    destroyPreloadedAudio()
     isHandingOff = false
     if (ap) ap.audio.volume = targetVolume
     isCrossfading = false
@@ -96,8 +107,13 @@ export const useCrossfade = () => {
     ap.list.switch(nextIdx)
     handoffAudio = tempAudio
 
+    let handoffDone = false
+    let handoffTimer = null
+
     const finishHandoff = () => {
-      if (!handoffAudio) return
+      if (handoffDone || !handoffAudio) return
+      handoffDone = true
+      if (handoffTimer) { clearTimeout(handoffTimer); handoffTimer = null }
       ap.audio.volume = targetVolume
       handoffAudio.pause()
       handoffAudio.src = ''
@@ -107,13 +123,13 @@ export const useCrossfade = () => {
     }
 
     const doSeekAndHandoff = () => {
-      if (!handoffAudio) return
+      if (handoffDone || !handoffAudio) return
       ap.audio.currentTime = handoffAudio.currentTime
       if (!ap.audio.seeking) {
         finishHandoff()
       } else {
         ap.audio.addEventListener('seeked', finishHandoff, { once: true })
-        setTimeout(() => finishHandoff(), 3000)
+        handoffTimer = setTimeout(() => finishHandoff(), 3000)
       }
     }
 
@@ -121,7 +137,7 @@ export const useCrossfade = () => {
       doSeekAndHandoff()
     } else {
       ap.audio.addEventListener('canplay', doSeekAndHandoff, { once: true })
-      setTimeout(() => finishHandoff(), 5000)
+      handoffTimer = setTimeout(() => finishHandoff(), 5000)
     }
   }
 
@@ -141,11 +157,14 @@ export const useCrossfade = () => {
       preloadedAudioEl = null
       preloadedForIndex = -1
     } else {
+      destroyPreloadedAudio()
       crossfadeAudio = new Audio(nextSong.url)
       crossfadeAudio.preload = 'auto'
     }
     crossfadeAudio.volume = 0
-    crossfadeAudio.play().catch(() => { })
+    crossfadeAudio.play().catch(() => {
+      cleanup(ap)
+    })
 
     const startTime = Date.now()
     const duration = CROSSFADE_DURATION * 1000
@@ -158,9 +177,9 @@ export const useCrossfade = () => {
         ? 2 * progress * progress
         : 1 - Math.pow(-2 * progress + 2, 2) / 2
 
-      ap.audio.volume = Math.max(0, targetVolume * (1 - ease))
+      ap.audio.volume = Math.max(0, targetVolume * Math.cos(ease * Math.PI / 2))
       if (crossfadeAudio) {
-        crossfadeAudio.volume = targetVolume * (0.5 + 0.5 * ease)
+        crossfadeAudio.volume = targetVolume * Math.sin(ease * Math.PI / 2)
       }
 
       if (progress < 1) {
@@ -202,11 +221,7 @@ export const useCrossfade = () => {
         crossfadeTriggered = false
       }
       if (remaining > 15) {
-        if (preloadedAudioEl) {
-          preloadedAudioEl.src = ''
-          preloadedAudioEl = null
-          preloadedForIndex = -1
-        }
+        destroyPreloadedAudio()
       }
     })
 
@@ -232,6 +247,8 @@ export const useCrossfade = () => {
 
   const fadeMusicOut = (ap, durationInSec = 2) => {
     if (!ap || ap.audio.paused) return
+    if (isCrossfading) cleanup(ap)
+    if (fadeAnimationId) { cancelAnimationFrame(fadeAnimationId); fadeAnimationId = null }
     const origVol = ap.audio.volume
     ap._fadeLastVolume = origVol
     const start = Date.now()
@@ -239,14 +256,15 @@ export const useCrossfade = () => {
     const outAnim = () => {
       const p = Math.min((Date.now() - start) / tgt, 1)
       ap.audio.volume = Math.max(0, origVol * (1 - p))
-      if (p < 1) requestAnimationFrame(outAnim)
-      else ap.pause()
+      if (p < 1) fadeAnimationId = requestAnimationFrame(outAnim)
+      else { fadeAnimationId = null; ap.pause() }
     }
-    requestAnimationFrame(outAnim)
+    fadeAnimationId = requestAnimationFrame(outAnim)
   }
 
   const fadeMusicIn = (ap, targetVol = null, durationInSec = 2) => {
     if (!ap) return
+    if (fadeAnimationId) { cancelAnimationFrame(fadeAnimationId); fadeAnimationId = null }
     const finalVol = targetVol !== null ? targetVol : (ap._fadeLastVolume || 0.7)
     ap.audio.volume = 0
     if (ap.audio.paused) ap.play().catch(() => {})
@@ -255,9 +273,10 @@ export const useCrossfade = () => {
     const inAnim = () => {
       const p = Math.min((Date.now() - start) / tgt, 1)
       ap.audio.volume = finalVol * p
-      if (p < 1) requestAnimationFrame(inAnim)
+      if (p < 1) fadeAnimationId = requestAnimationFrame(inAnim)
+      else fadeAnimationId = null
     }
-    requestAnimationFrame(inAnim)
+    fadeAnimationId = requestAnimationFrame(inAnim)
   }
 
   return {

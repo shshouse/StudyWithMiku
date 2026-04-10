@@ -178,7 +178,7 @@ const switchVideo = () => {
 const aplayer = ref(null)
 const aplayerInitialized = ref(false)
 const { songs, loadSongs, loading } = useMusic()
-const { setupCrossfade } = useCrossfade()
+const { setupCrossfade, cleanup: cleanupCrossfade } = useCrossfade()
 
 let videoStalledTimer = null
 const onVideoLoaded = () => {
@@ -370,6 +370,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (aplayer.value) {
+    cleanupCrossfade(aplayer.value)
     aplayer.value.destroy()
   }
 })

@@ -9,7 +9,7 @@
       @touchstart="onUITouchStart"
       @touchend="onUITouchEnd"
     >
-      <span v-if="hasNewUpdate || hasNewPlaylist" class="clock-update-dot"></span>
+      <span v-if="hasNewUpdate || hasNewPlaylist || !qqGroupSeen" class="clock-update-dot"></span>
       <div class="clock-row">
         <div class="online-indicator">
           <span class="online-dot" :class="{ connected: isConnected }"></span>
@@ -30,6 +30,12 @@
         </div>
       </transition>
     </div>
+    <transition name="slide-fade">
+      <div v-if="!qqGroupSeen" class="qq-tooltip" @click.stop="dismissQQTooltip">
+        <div class="qq-tooltip-arrow"></div>
+        <span>欢迎加入聊天QQ群＞﹏＜</span>
+      </div>
+    </transition>
     <transition name="fade">
       <div v-if="showHitokoto && showHitokotoAnimation" :key="currentHitokoto.text" class="hitokoto-container">
         {{ currentHitokoto.text }}
@@ -51,7 +57,7 @@
               <button class="nav-item" :class="{ active: currentTab === 'playlist' }" @click="openPlaylistTab">歌单<span v-if="hasNewPlaylist" class="update-dot"></span></button>
               <button class="nav-item" :class="{ active: currentTab === 'sync' }" @click="currentTab = 'sync'">云同步</button>
               <button class="nav-item" :class="{ active: currentTab === 'updates' }" @click="openUpdatesTab">更新日志<span v-if="hasNewUpdate" class="update-dot"></span></button>
-              <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="currentTab = 'about'">关于</button>
+              <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="openAboutTab">关于<span v-if="!qqGroupSeen" class="update-dot"></span></button>
             </div>
             <div class="settings-content">
               <transition name="tab-fade" mode="out-in">
@@ -245,6 +251,7 @@
                   <p>2.项目代码在github开源，欢迎点上star！</p>
                   <p>3.项目部署域名：study.mikumod.com</p>
                   <p>4.希望你可以喜欢！在悠闲的音乐里和初音一起学习吧~</p>
+                  <p>5.QQ交流反馈群＞﹏＜：<span class="qq-group-number" @click="copyQQGroup">{{ QQ_GROUP }}</span>（点击复制）</p>
                 </div>
                 <div class="runtime-display">
                   <div class="runtime-label">网站已运行</div>
@@ -325,8 +332,11 @@ import { useCalendar } from '../composables/useCalendar.js'
 
 const UPDATE_READ_KEY = 'last_read_update'
 const PLAYLIST_READ_KEY = 'last_read_playlist'
+const QQ_GROUP_SEEN_KEY = 'qq_group_seen'
+const QQ_GROUP = '941108668'
 const hasNewUpdate = ref(localStorage.getItem(UPDATE_READ_KEY) !== LATEST_UPDATE_VERSION)
 const hasNewPlaylist = ref(localStorage.getItem(PLAYLIST_READ_KEY) !== LATEST_PLAYLIST_VERSION)
+const qqGroupSeen = ref(!!localStorage.getItem(QQ_GROUP_SEEN_KEY))
 const openUpdatesTab = () => {
   currentTab.value = 'updates'
   hasNewUpdate.value = false
@@ -336,6 +346,22 @@ const openPlaylistTab = () => {
   currentTab.value = 'playlist'
   hasNewPlaylist.value = false
   localStorage.setItem(PLAYLIST_READ_KEY, LATEST_PLAYLIST_VERSION)
+}
+const openAboutTab = () => {
+  currentTab.value = 'about'
+  if (!qqGroupSeen.value) {
+    qqGroupSeen.value = true
+    localStorage.setItem(QQ_GROUP_SEEN_KEY, '1')
+  }
+}
+const copyQQGroup = () => {
+  navigator.clipboard.writeText(QQ_GROUP).then(() => {
+    alert('QQ群号已复制: ' + QQ_GROUP)
+  })
+}
+const dismissQQTooltip = () => {
+  qqGroupSeen.value = true
+  localStorage.setItem(QQ_GROUP_SEEN_KEY, '1')
 }
 
 const props = defineProps({
@@ -747,6 +773,27 @@ const handleVisibilityChange = () => {
   position: absolute; top: -3px; right: -3px; width: 10px; height: 10px;
   background: #ff4444; border-radius: 50%; box-shadow: 0 0 8px rgba(255, 68, 68, 0.7);
 }
+.qq-tooltip {
+  position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 1000;
+  background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px);
+  border-radius: 10px; padding: 0.6rem 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9); font-size: 0.85rem; cursor: pointer;
+  display: flex; align-items: center; gap: 0.5rem;
+  animation: qq-tooltip-bounce 3s ease-in-out infinite;
+  white-space: nowrap; transition: background 0.3s ease;
+}
+.qq-tooltip:hover { background: rgba(255, 255, 255, 0.18); }
+.qq-tooltip-arrow {
+  position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: 6px solid transparent; border-right: 6px solid transparent;
+  border-bottom: 6px solid rgba(255, 255, 255, 0.2);
+}
+@keyframes qq-tooltip-bounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-3px); }
+}
 .clock-row {
   display: flex; align-items: center; gap: 1rem;
 }
@@ -1027,6 +1074,8 @@ const handleVisibilityChange = () => {
 .about-link:hover { background: rgba(255, 255, 255, 0.15); transform: translateY(-2px); }
 .about-link .icon { width: 24px; height: 24px; }
 .about-link span { white-space: nowrap; }
+.qq-group-number { color: #4ecdc4; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; transition: opacity 0.2s; }
+.qq-group-number:hover { opacity: 0.8; }
 
 @media (max-width: 768px) {
   .about-container { padding: 1rem 0; }
