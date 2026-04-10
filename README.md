@@ -4,7 +4,7 @@
 ### 喜欢的话请点点star，谢谢！Ciallo～(∠・ω<)⌒☆
 
 在线开始学习：
-- [直接访问](https://study.mikugame.icu)
+- [直接访问](https://study.mikumod.com)
 
 B站视频介绍：
 - [bilibili](https://www.bilibili.com/video/BV18TSWBzE4o)
