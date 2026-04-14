@@ -171,7 +171,7 @@
                 </div>
                 <div class="playlist-actions">
                   <button class="action-btn apply-btn" @click="applyPlaylist">获取</button>
-                  <button class="action-btn reset-playlist-btn" @click="resetPlaylist">恢复默认</button>
+                  <button class="action-btn reset-playlist-btn" @click="resetPlaylist">默认歌单</button>
                   <a class="action-btn help-btn" href="https://www.bilibili.com/opus/1144256090307821590" target="_blank">歌单ID怎么获取?</a>
                 </div>
                 <div class="playlist-recommend">
