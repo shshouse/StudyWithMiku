@@ -14,6 +14,7 @@
         <div class="online-indicator">
           <span class="online-dot" :class="{ connected: isConnected }"></span>
           <span class="online-text">{{ onlineCount }}</span>
+          <span v-if="adminOnline" class="admin-online">站长在线＞﹏＜</span>
         </div>
         <div class="clock-display">
           <span class="minutes">{{ formattedMinutes }}</span>
@@ -371,10 +372,9 @@ const props = defineProps({
   }
 })
 
-const { onlineCount, isConnected } = useOnlineCount(import.meta.env.VITE_WS_URL)
-const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS } = useMusic()
-
 const { token, username, isLoggedIn, login, logout, isTokenExpired } = useStudyAuth()
+const { onlineCount, adminOnline, isConnected } = useOnlineCount(import.meta.env.VITE_WS_URL, { username })
+const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS } = useMusic()
 const { syncStatus, lastSyncTime, conflictData, syncOnLogin, resolveConflict, pushData, pushCalendar, fetchCalendar, pushAll } = useStudySync()
 const { crossfadeEnabled, toggleCrossfade, fadeMusicOut, fadeMusicIn } = useCrossfade()
 const { recordStudyTime: calendarRecordStudy, recordPomodoro: calendarRecordPomodoro, getCalendarData, setCalendarData } = useCalendar()
@@ -816,6 +816,7 @@ const handleVisibilityChange = () => {
 .online-dot { width: 8px; height: 8px; border-radius: 50%; background: #666; transition: background 0.3s ease; }
 .online-dot.connected { background: #4caf50; box-shadow: 0 0 8px rgba(76, 175, 80, 0.6); }
 .online-text { font-size: 0.9rem; font-weight: 500; opacity: 0.9; }
+.admin-online { margin-left: 0.5rem; font-size: 0.6rem; color: #4caf50; background: rgba(76, 175, 80, 0.1); padding: 0.1rem 0.3rem; border-radius: 999px; border: 1px solid rgba(76, 175, 80, 0.3); }
 .hitokoto-container {
   position: fixed; top: 115px; left: 50%; transform: translateX(-50%); z-index: 1002;
   max-width: 600px; padding: 0;

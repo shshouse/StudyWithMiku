@@ -4,11 +4,24 @@ export class OnlineCounter {
     this.env = env
   }
 
+  getSessionMeta(ws) {
+    try {
+      return ws.deserializeAttachment() || { username: '' }
+    } catch {
+      return { username: '' }
+    }
+  }
+
+  setSessionMeta(ws, username = '') {
+    ws.serializeAttachment({ username })
+  }
+
   async fetch(request) {
     const pair = new WebSocketPair()
     const [client, server] = Object.values(pair)
 
     this.state.acceptWebSocket(server)
+    this.setSessionMeta(server)
     this.broadcast()
 
     return new Response(null, {
@@ -22,6 +35,12 @@ export class OnlineCounter {
       const data = JSON.parse(message)
       if (data.type === 'ping') {
         ws.send(JSON.stringify({ type: 'pong' }))
+        return
+      }
+
+      if (data.type === 'username') {
+        this.setSessionMeta(ws, data.username || '')
+        this.broadcast()
       }
     } catch (err) {
       console.error('Parse error:', err)
@@ -40,7 +59,16 @@ export class OnlineCounter {
   broadcast() {
     const sessions = this.state.getWebSockets()
     const count = sessions.length
-    const message = JSON.stringify({ type: 'count', count })
+    const isAdminOnline = sessions.some(session => {
+      const meta = this.getSessionMeta(session)
+      return meta.username === 'shshouse'
+    })
+
+    const message = JSON.stringify({ 
+      type: 'count', 
+      count,
+      adminOnline: isAdminOnline 
+    })
     
     for (const session of sessions) {
       try {

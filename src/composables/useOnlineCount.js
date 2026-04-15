@@ -1,11 +1,23 @@
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch, unref } from 'vue'
 
-export function useOnlineCount(wsUrl) {
+export function useOnlineCount(wsUrl, options = {}) {
   const onlineCount = ref(0)
+  const adminOnline = ref(false)
   const isConnected = ref(false)
   let ws = null
   let reconnectTimer = null
   let pingTimer = null
+
+  const sendMessage = (payload) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(payload))
+    }
+  }
+
+  const updateUsername = () => {
+    const username = unref(options.username) || ''
+    sendMessage({ type: 'username', username })
+  }
 
   const connect = () => {
     try {
@@ -15,6 +27,7 @@ export function useOnlineCount(wsUrl) {
         isConnected.value = true
         console.log('WebSocket connected')
         startPing()
+        updateUsername()
       }
 
       ws.onmessage = (event) => {
@@ -22,6 +35,7 @@ export function useOnlineCount(wsUrl) {
           const data = JSON.parse(event.data)
           if (data.type === 'count') {
             onlineCount.value = data.count
+            adminOnline.value = !!data.adminOnline
           }
         } catch (err) {
           console.error('Parse message error:', err)
@@ -30,6 +44,8 @@ export function useOnlineCount(wsUrl) {
 
       ws.onclose = () => {
         isConnected.value = false
+        onlineCount.value = 0
+        adminOnline.value = false
         console.log('WebSocket disconnected')
         stopPing()
         scheduleReconnect()
@@ -79,6 +95,13 @@ export function useOnlineCount(wsUrl) {
     }
   }
 
+  watch(
+    () => unref(options.username),
+    () => {
+      updateUsername()
+    }
+  )
+
   onMounted(() => {
     connect()
   })
@@ -89,6 +112,7 @@ export function useOnlineCount(wsUrl) {
 
   return {
     onlineCount,
+    adminOnline,
     isConnected,
   }
 }
