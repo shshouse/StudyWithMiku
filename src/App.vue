@@ -9,7 +9,7 @@
       <video 
         :key="currentVideo"
         ref="videoRef" 
-        class="video-background" 
+        :class="['video-background', { 'video-background-focus-left-mobile': currentVideoName === '1.mp4' }]" 
         :src="currentVideo" 
         autoplay 
         muted 
@@ -47,7 +47,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useFullscreen } from '@vueuse/core'
 import { loadScript, loadStyle, preloadVideos } from './utils/cache.js'
 import { setAPlayerInstance, setHoveringUI, isHoveringUI } from './utils/eventBus.js'
@@ -168,6 +168,7 @@ const videos = isR2Domain
 const savedVideoIndex = getVideoIndex()
 const currentVideoIndex = ref(savedVideoIndex < videos.length ? savedVideoIndex : 0)
 const currentVideo = ref(videos[currentVideoIndex.value])
+const currentVideoName = computed(() => currentVideo.value.split('/').pop()?.split('?')[0] || '')
 
 const switchVideo = () => {
   currentVideoIndex.value = (currentVideoIndex.value + 1) % videos.length

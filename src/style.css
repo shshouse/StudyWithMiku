@@ -23,7 +23,14 @@ body {
   width: 100vw;
   height: 100vh;
   object-fit: cover;
+  object-position: center center;
   z-index: -1;
+}
+
+@media (max-width: 768px) and (orientation: portrait) {
+  .video-background-focus-left-mobile {
+    object-position: 37% center;
+  }
 }
 
 .overlay {

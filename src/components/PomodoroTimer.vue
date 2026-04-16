@@ -1,48 +1,50 @@
 <template>
   <div>
-    <div 
-      class="countdown-clock" 
-      :class="{ 'settings-open': showSettings, 'hidden': hidePomodoroOnIdle && !props.showControls }"
-      @click="toggleSettings"
-      @mouseenter="onUIMouseEnter"
-      @mouseleave="onUIMouseLeave"
-      @touchstart="onUITouchStart"
-      @touchend="onUITouchEnd"
-    >
-      <span v-if="hasNewUpdate || hasNewPlaylist || !qqGroupSeen" class="clock-update-dot"></span>
-      <div class="clock-row">
-        <div class="online-indicator">
-          <span class="online-dot" :class="{ connected: isConnected }"></span>
-          <span class="online-text">{{ onlineCount }}</span>
-          <span v-if="adminOnline" class="admin-online">站长在线＞﹏＜</span>
+    <div class="pomodoro-floating-ui">
+      <div 
+        class="countdown-clock" 
+        :class="{ 'settings-open': showSettings, 'hidden': hidePomodoroOnIdle && !props.showControls }"
+        @click="toggleSettings"
+        @mouseenter="onUIMouseEnter"
+        @mouseleave="onUIMouseLeave"
+        @touchstart="onUITouchStart"
+        @touchend="onUITouchEnd"
+      >
+        <span v-if="hasNewUpdate || hasNewPlaylist || !qqGroupSeen" class="clock-update-dot"></span>
+        <div class="clock-row">
+          <div class="online-indicator">
+            <span class="online-dot" :class="{ connected: isConnected }"></span>
+            <span class="online-text">{{ onlineCount }}</span>
+            <span v-if="adminOnline" class="admin-online">站长在线</span>
+          </div>
+          <div class="clock-display">
+            <span class="minutes">{{ formattedMinutes }}</span>
+            <span class="separator">:</span>
+            <span class="seconds">{{ formattedSeconds }}</span>
+          </div>
+          <div class="status-badge" :class="statusClass">{{ statusText }}</div>
+          <div class="system-time">{{ systemTime }}</div>
         </div>
-        <div class="clock-display">
-          <span class="minutes">{{ formattedMinutes }}</span>
-          <span class="separator">:</span>
-          <span class="seconds">{{ formattedSeconds }}</span>
-        </div>
-        <div class="status-badge" :class="statusClass">{{ statusText }}</div>
-        <div class="system-time">{{ systemTime }}</div>
+        <transition name="slide-fade">
+          <div v-if="currentTodo" class="current-todo">
+            <span class="todo-label">当前任务:</span>
+            <span class="todo-content">{{ currentTodo.text }}</span>
+          </div>
+        </transition>
       </div>
       <transition name="slide-fade">
-        <div v-if="currentTodo" class="current-todo">
-          <span class="todo-label">当前任务:</span>
-          <span class="todo-content">{{ currentTodo.text }}</span>
+        <div v-if="!qqGroupSeen" class="qq-tooltip" @click.stop="dismissQQTooltip">
+          <div class="qq-tooltip-arrow"></div>
+          <span>欢迎加入聊天QQ群＞﹏＜</span>
+        </div>
+      </transition>
+      <transition name="fade">
+        <div v-if="showHitokoto && showHitokotoAnimation" :key="currentHitokoto.text" class="hitokoto-container">
+          {{ currentHitokoto.text }}
+          <span v-if="currentHitokoto.source" class="hitokoto-source">{{ currentHitokoto.source }}</span>
         </div>
       </transition>
     </div>
-    <transition name="slide-fade">
-      <div v-if="!qqGroupSeen" class="qq-tooltip" @click.stop="dismissQQTooltip">
-        <div class="qq-tooltip-arrow"></div>
-        <span>欢迎加入聊天QQ群＞﹏＜</span>
-      </div>
-    </transition>
-    <transition name="fade">
-      <div v-if="showHitokoto && showHitokotoAnimation" :key="currentHitokoto.text" class="hitokoto-container">
-        {{ currentHitokoto.text }}
-        <span v-if="currentHitokoto.source" class="hitokoto-source">{{ currentHitokoto.source }}</span>
-      </div>
-    </transition>
     <transition name="fade">
       <div v-if="showSettings" class="settings-overlay" @click.self="closeSettings" @mouseenter="onUIMouseEnter" @mouseleave="onUIMouseLeave" @touchstart="onUITouchStart" @touchend="onUITouchEnd">
         <div class="settings-panel">
@@ -763,18 +765,24 @@ const handleVisibilityChange = () => {
 </script>
 
 <style scoped>
+.pomodoro-floating-ui {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1001;
+  display: flex; flex-direction: column; align-items: center; gap: 0.75rem;
+  max-width: calc(100vw - 2rem);
+}
 .countdown-clock {
-  position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1001; cursor: pointer;
+  position: relative; cursor: pointer;
   transition: all 0.3s ease; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px);
   border-radius: 10px; padding: 0.8rem 1.2rem; border: 1px solid rgba(255, 255, 255, 0.2);
   display: flex; flex-direction: column; align-items: center; gap: 0.6rem; color: white; font-family: 'Courier New', monospace;
+  width: fit-content; max-width: calc(100vw - 2rem); box-sizing: border-box;
 }
 .clock-update-dot {
   position: absolute; top: -3px; right: -3px; width: 10px; height: 10px;
   background: #ff4444; border-radius: 50%; box-shadow: 0 0 8px rgba(255, 68, 68, 0.7);
 }
 .qq-tooltip {
-  position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 1000;
+  position: relative;
   background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px);
   border-radius: 10px; padding: 0.6rem 1.2rem;
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -782,6 +790,7 @@ const handleVisibilityChange = () => {
   display: flex; align-items: center; gap: 0.5rem;
   animation: qq-tooltip-bounce 3s ease-in-out infinite;
   white-space: nowrap; transition: background 0.3s ease;
+  max-width: calc(100vw - 2rem); box-sizing: border-box;
 }
 .qq-tooltip:hover { background: rgba(255, 255, 255, 0.18); }
 .qq-tooltip-arrow {
@@ -791,11 +800,11 @@ const handleVisibilityChange = () => {
   border-bottom: 6px solid rgba(255, 255, 255, 0.2);
 }
 @keyframes qq-tooltip-bounce {
-  0%, 100% { transform: translateX(-50%) translateY(0); }
-  50% { transform: translateX(-50%) translateY(-3px); }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
 }
 .clock-row {
-  display: flex; align-items: center; gap: 1rem;
+  display: flex; align-items: center; gap: clamp(0.6rem, 2.5vw, 1rem);
 }
 .current-todo {
   display: flex; align-items: center; gap: 0.5rem; padding-top: 0.6rem; border-top: 1px solid rgba(255, 255, 255, 0.1); font-size: 0.85rem; width: 100%;
@@ -809,17 +818,16 @@ const handleVisibilityChange = () => {
 .countdown-clock.hidden {
   opacity: 0;
   pointer-events: none;
-  transform: translateX(-50%) translateY(-10px);
+  transform: translateY(-10px);
 }
-.system-time { font-size: 0.9rem; font-weight: 500; opacity: 0.8; padding-left: 1rem; border-left: 1px solid rgba(255, 255, 255, 0.2); }
-.online-indicator { display: flex; align-items: center; gap: 0.5rem; padding-right: 1rem; border-right: 1px solid rgba(255, 255, 255, 0.2); }
+.system-time { font-size: 0.9rem; font-weight: 500; opacity: 0.8; padding-left: clamp(0.6rem, 2vw, 1rem); border-left: 1px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; white-space: nowrap; }
+.online-indicator { display: flex; align-items: center; gap: 0.5rem; padding-right: clamp(0.6rem, 2vw, 1rem); border-right: 1px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; min-width: 0; }
 .online-dot { width: 8px; height: 8px; border-radius: 50%; background: #666; transition: background 0.3s ease; }
 .online-dot.connected { background: #4caf50; box-shadow: 0 0 8px rgba(76, 175, 80, 0.6); }
-.online-text { font-size: 0.9rem; font-weight: 500; opacity: 0.9; }
-.admin-online { margin-left: 0.5rem; font-size: 0.6rem; color: #4caf50; background: rgba(76, 175, 80, 0.1); padding: 0.1rem 0.3rem; border-radius: 999px; border: 1px solid rgba(76, 175, 80, 0.3); }
+.online-text { font-size: 0.9rem; font-weight: 500; opacity: 0.9; white-space: nowrap; }
+.admin-online { margin-left: 0.35rem; display: inline-flex; align-items: center; flex-shrink: 0; white-space: nowrap; writing-mode: horizontal-tb; font-size: 0.6rem; line-height: 1; color: #4caf50; background: rgba(76, 175, 80, 0.1); padding: 0.18rem 0.35rem; border-radius: 999px; border: 1px solid rgba(76, 175, 80, 0.3); }
 .hitokoto-container {
-  position: fixed; top: 115px; left: 50%; transform: translateX(-50%); z-index: 1002;
-  max-width: 600px; padding: 0;
+  width: min(600px, calc(100vw - 2rem)); max-width: 100%; padding: 0 0.5rem;
   color: white; font-size: 0.95rem; line-height: 1.6; text-align: center;
   word-break: break-word; transition: all 0.3s ease; opacity: 0.9;
 }
@@ -827,11 +835,33 @@ const handleVisibilityChange = () => {
   display: block; margin-top: 0.3em; font-size: 0.8em; opacity: 0.6;
 }
 @media (max-width: 768px) {
+  .pomodoro-floating-ui {
+    top: 16px; max-width: calc(100vw - 1rem); gap: 0.5rem;
+  }
+  .countdown-clock {
+    max-width: calc(100vw - 1rem); padding: 0.75rem 0.9rem;
+  }
+  .qq-tooltip {
+    max-width: calc(100vw - 1rem); padding: 0.55rem 0.9rem; font-size: 0.8rem;
+  }
+  .clock-row {
+    gap: 0.65rem;
+  }
+  .online-indicator {
+    gap: 0.35rem;
+  }
+  .online-text,
+  .system-time {
+    font-size: 0.85rem;
+  }
+  .status-badge {
+    padding: 0.25rem 0.65rem; font-size: 0.75rem;
+  }
   .hitokoto-container {
-    top: 115px; max-width: 90%; padding: 0; font-size: 0.85rem;
+    width: calc(100vw - 1rem); padding: 0 0.25rem; font-size: 0.85rem;
   }
 }
-.countdown-clock:hover { background: rgba(255, 255, 255, 0.15); transform: translateX(-50%) translateY(-2px); }
+.countdown-clock:hover { background: rgba(255, 255, 255, 0.15); transform: translateY(-2px); }
 .countdown-clock.settings-open { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.4); }
 .clock-display { font-size: clamp(0.8rem, 3vw, 1.5rem); font-weight: 600; }
 .status-badge { padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.8rem; font-weight: 500; background: rgba(255, 255, 255, 0.1); }
