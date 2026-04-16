@@ -554,6 +554,7 @@ let studyTimeCounter = 0
 let phaseEndTime = null
 let lastRecordedTimeLeft = 0
 let hitokotoInterval = null
+let wasMusicPlayingBeforeBreak = false
 
 watch(focusDuration, (newVal) => { if (currentStatus.value === STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(newVal, breakDuration.value, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
 watch(breakDuration, (newVal) => { if (currentStatus.value !== STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(focusDuration.value, newVal, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
@@ -657,6 +658,10 @@ const resetTimer = () => { pauseTimer(); timeLeft.value = focusDuration.value * 
 const handleTimerComplete = () => {
   playNotificationSound()
   const completedStatus = currentStatus.value
+  isRunning.value = false
+  if (timer) { clearTimeout(timer); timer = null }
+  phaseEndTime = null
+  
   if (currentStatus.value === STATUS.FOCUS) {
     completedPomodoros.value++
     addPomodoro()
@@ -664,22 +669,26 @@ const handleTimerComplete = () => {
     else { currentStatus.value = STATUS.BREAK; timeLeft.value = breakDuration.value * 60 }
     if (pauseMusicDuringBreak.value) {
       const ap = getAPlayerInstance()
+      wasMusicPlayingBeforeBreak = ap && !ap.audio.paused
       if (ap) fadeMusicOut(ap, 2)
     }
   } else {
     currentStatus.value = STATUS.FOCUS
     timeLeft.value = focusDuration.value * 60
-    if (pauseMusicDuringBreak.value) {
+    if (pauseMusicDuringBreak.value && wasMusicPlayingBeforeBreak) {
       const ap = getAPlayerInstance()
       if (ap) fadeMusicIn(ap, null, 2)
     }
+    wasMusicPlayingBeforeBreak = false
   }
+  
   const statusTextMap = { [STATUS.FOCUS]: '专注', [STATUS.BREAK]: '休息', [STATUS.LONG_BREAK]: '长休' }
   const alertMsg = `${statusTextMap[completedStatus]}已完成！`
   try { if ('Notification' in window && Notification.permission === 'granted') new Notification('番茄钟', { body: alertMsg, icon: '/favicon.ico' }) } catch(e) {}
   studyTimeCounter = 0
   lastRecordedTimeLeft = timeLeft.value
   phaseEndTime = Date.now() + timeLeft.value * 1000
+  isRunning.value = true
   scheduleNextTick()
 }
 const playNotificationSound = () => {
