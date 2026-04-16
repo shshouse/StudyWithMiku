@@ -617,8 +617,6 @@ const timerUpdate = () => {
   lastRecordedTimeLeft = remaining
   if (remaining <= 0) {
     if (currentStatus.value === STATUS.FOCUS && studyTimeCounter > 0) { addStudyTime(studyTimeCounter); studyTimeCounter = 0 }
-    timer = null
-    phaseEndTime = null
     handleTimerComplete()
   } else {
     scheduleNextTick()
@@ -658,7 +656,8 @@ const resetTimer = () => { pauseTimer(); timeLeft.value = focusDuration.value * 
 const handleTimerComplete = () => {
   playNotificationSound()
   const completedStatus = currentStatus.value
-  isRunning.value = false
+  
+  // 清理当前计时器但保持运行状态
   if (timer) { clearTimeout(timer); timer = null }
   phaseEndTime = null
   
@@ -685,6 +684,8 @@ const handleTimerComplete = () => {
   const statusTextMap = { [STATUS.FOCUS]: '专注', [STATUS.BREAK]: '休息', [STATUS.LONG_BREAK]: '长休' }
   const alertMsg = `${statusTextMap[completedStatus]}已完成！`
   try { if ('Notification' in window && Notification.permission === 'granted') new Notification('番茄钟', { body: alertMsg, icon: '/favicon.ico' }) } catch(e) {}
+  
+  // 重新启动计时器
   studyTimeCounter = 0
   lastRecordedTimeLeft = timeLeft.value
   phaseEndTime = Date.now() + timeLeft.value * 1000

@@ -267,7 +267,7 @@ export const useCrossfade = () => {
     if (fadeAnimationId) { cancelAnimationFrame(fadeAnimationId); fadeAnimationId = null }
     const finalVol = targetVol !== null ? targetVol : (ap._fadeLastVolume || 0.7)
     ap.audio.volume = 0
-    if (ap.audio.paused) ap.play().catch(() => {})
+    if (ap.audio.paused) { try { const p = ap.play(); if (p && p.catch) p.catch(() => {}) } catch(e) {} }
     const start = Date.now()
     const tgt = durationInSec * 1000
     const inAnim = () => {
