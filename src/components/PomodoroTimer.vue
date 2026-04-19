@@ -878,6 +878,138 @@ const handleVisibilityChange = () => {
 .status-badge.focus { color: #ff6b6b; }
 .status-badge.break { color: #4ecdc4; }
 .status-badge.long-break { color: #45b7d1; }
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-width: 1024px) {
+  .pomodoro-floating-ui {
+    top: 16px;
+    top: calc(16px + env(safe-area-inset-top));
+    right: 20px;
+    right: calc(20px + env(safe-area-inset-right));
+    left: auto;
+    transform: none;
+    align-items: flex-end;
+    gap: 0;
+    max-width: calc(100vw - 1rem);
+  }
+
+  .countdown-clock {
+    width: clamp(132px, 18vw, 152px);
+    max-width: calc(100vw - 1rem);
+    aspect-ratio: 1 / 1;
+    padding: 0.72rem 0.72rem 0.65rem;
+    gap: 0.5rem;
+    align-items: stretch;
+    justify-content: space-between;
+    border-radius: 22px;
+    background: rgba(24, 24, 24, 0.44);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.22);
+    overflow: hidden;
+  }
+
+  .clock-update-dot {
+    top: 10px;
+    right: 10px;
+    width: 6px;
+    height: 6px;
+  }
+
+  .clock-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "online status"
+      "time time"
+      "system system";
+    align-content: start;
+    align-items: center;
+    gap: 0.42rem;
+    width: 100%;
+    flex: 1;
+  }
+
+  .online-indicator {
+    grid-area: online;
+    justify-self: start;
+    gap: 0.3rem;
+    padding: 0.14rem 0.38rem;
+    border-right: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    max-width: 100%;
+  }
+
+  .online-dot {
+    width: 6px;
+    height: 6px;
+  }
+
+  .online-text {
+    font-size: 0.68rem;
+    line-height: 1;
+  }
+
+  .admin-online {
+    display: none;
+  }
+
+  .clock-display {
+    grid-area: time;
+    justify-self: center;
+    align-self: center;
+    font-size: clamp(1.6rem, 4.6vw, 1.95rem);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.08em;
+  }
+
+  .status-badge {
+    grid-area: status;
+    justify-self: end;
+    padding: 0.18rem 0.46rem;
+    border-radius: 999px;
+    font-size: 0.64rem;
+    white-space: nowrap;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .system-time {
+    grid-area: system;
+    justify-self: center;
+    padding-left: 0;
+    border-left: none;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+  }
+
+  .current-todo {
+    justify-content: center;
+    align-items: center;
+    gap: 0;
+    margin-top: auto;
+    padding-top: 0.42rem;
+    font-size: 0.62rem;
+    text-align: center;
+  }
+
+  .todo-label {
+    display: none;
+  }
+
+  .todo-content {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+    opacity: 0.82;
+  }
+
+  .qq-tooltip,
+  .hitokoto-container {
+    display: none;
+  }
+}
 .settings-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1002; }
 .settings-panel { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(30px); border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.2); width: 90%; max-width: 550px; height: 70vh; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; }
 

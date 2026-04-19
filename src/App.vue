@@ -536,6 +536,28 @@ onUnmounted(() => {
   }
 }
 
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-width: 1024px) {
+  .fullscreen-btn {
+    position: fixed;
+    top: 20px;
+    top: calc(20px + env(safe-area-inset-top));
+    bottom: auto;
+    left: 20px;
+    left: calc(20px + env(safe-area-inset-left));
+    right: auto;
+  }
+
+  .switch-video-btn {
+    position: fixed;
+    top: 68px;
+    top: calc(68px + env(safe-area-inset-top));
+    bottom: auto;
+    left: 20px;
+    left: calc(20px + env(safe-area-inset-left));
+    right: auto;
+  }
+}
+
 </style>
 
 
