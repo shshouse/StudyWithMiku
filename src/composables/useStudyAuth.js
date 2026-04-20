@@ -7,6 +7,39 @@ const token = ref(localStorage.getItem(STUDY_TOKEN_KEY) || '')
 const username = ref(localStorage.getItem(STUDY_USER_KEY) || '')
 const isLoggedIn = computed(() => !!token.value)
 
+ function decodeBase64UrlJson(base64Url) {
+     const normalized = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+     const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4)
+     const binary = atob(padded)
+     const bytes = new Uint8Array(binary.length)
+
+     for (let i = 0; i < binary.length; i++) {
+         bytes[i] = binary.charCodeAt(i)
+     }
+
+     return JSON.parse(new TextDecoder().decode(bytes))
+ }
+
+ function getTokenPayload(studyToken) {
+     try {
+         const payloadB64 = studyToken.split('.')[1]
+         if (!payloadB64) return null
+         return decodeBase64UrlJson(payloadB64)
+     } catch {
+         return null
+     }
+ }
+
+ function syncUsernameFromToken(studyToken) {
+     const payload = getTokenPayload(studyToken)
+     if (!payload) return
+
+     if (payload.username || payload.sub) {
+         username.value = payload.username || payload.sub.slice(0, 8)
+         localStorage.setItem(STUDY_USER_KEY, username.value)
+     }
+ }
+
 const MIKUMOD_URL = import.meta.env.VITE_MIKUMOD_URL || 'https://mikumod.com'
 const STUDY_URL = import.meta.env.VITE_STUDY_URL || 'https://study.mikumod.com'
 
@@ -29,14 +62,7 @@ export function useStudyAuth() {
             localStorage.setItem(STUDY_TOKEN_KEY, match[1])
 
 
-            try {
-                const payloadB64 = match[1].split('.')[1]
-                const payload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')))
-                if (payload.username || payload.sub) {
-                    username.value = payload.username || payload.sub.slice(0, 8)
-                    localStorage.setItem(STUDY_USER_KEY, username.value)
-                }
-            } catch { }
+            syncUsernameFromToken(match[1])
 
 
             history.replaceState(null, '', window.location.pathname + window.location.search)
@@ -62,13 +88,9 @@ export function useStudyAuth() {
 
     const isTokenExpired = () => {
         if (!token.value) return true
-        try {
-            const payloadB64 = token.value.split('.')[1]
-            const payload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')))
-            return payload.exp < Math.floor(Date.now() / 1000)
-        } catch {
-            return true
-        }
+        const payload = getTokenPayload(token.value)
+        if (!payload) return true
+        return payload.exp < Math.floor(Date.now() / 1000)
     }
 
     onMounted(() => {
@@ -76,6 +98,10 @@ export function useStudyAuth() {
 
         if (token.value && isTokenExpired()) {
             logout()
+            return
+        }
+        if (token.value) {
+            syncUsernameFromToken(token.value)
         }
     })
 
