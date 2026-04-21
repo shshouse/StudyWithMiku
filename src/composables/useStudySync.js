@@ -131,7 +131,7 @@ export function useStudySync() {
 
         if (!remoteData) {
             await pushData(localStats, localTodos, localSettings)
-            return { needResolve: false }
+            return { autoMerged: false }
         }
 
         const remoteStats = remoteData.stats || {}
@@ -139,16 +139,16 @@ export function useStudySync() {
         const remoteHasData = remoteStats.totalStudyTime > 0 || remoteStats.totalPomodoros > 0
 
         if (!localHasData && !remoteHasData) {
-            return { needResolve: false }
+            return { autoMerged: false }
         }
 
         if (localHasData && !remoteHasData) {
             await pushData(localStats, localTodos, localSettings)
-            return { needResolve: false }
+            return { autoMerged: false }
         }
 
         if (!localHasData && remoteHasData) {
-            return { needResolve: false, applyRemote: remoteData }
+            return { autoMerged: true, applyRemote: remoteData }
         }
 
         const statsMatch =
@@ -157,39 +157,27 @@ export function useStudySync() {
 
         if (statsMatch) {
             await pushData(localStats, localTodos, localSettings)
-            return { needResolve: false }
+            return { autoMerged: false }
         }
 
-        conflictData.value = remoteData
-        return {
-            needResolve: true,
-            remoteData,
-            localData: { stats: localStats, todos: localTodos, settings: localSettings },
-        }
-    }
+        const localScore = (localStats.totalStudyTime || 0) * 1000 + (localStats.totalPomodoros || 0)
+        const remoteScore = (remoteStats.totalStudyTime || 0) * 1000 + (remoteStats.totalPomodoros || 0)
 
-    const resolveConflict = async (choice, localStats, localTodos, localSettings) => {
-        if (choice === 'local') {
-            await pushData(localStats, localTodos, localSettings)
-            conflictData.value = null
-            return null
-        } else {
-            const remote = conflictData.value
-            conflictData.value = null
-            return remote
+        if (remoteScore > localScore) {
+            return { autoMerged: true, applyRemote: remoteData }
         }
+        await pushData(localStats, localTodos, localSettings)
+        return { autoMerged: true }
     }
 
     return {
         syncStatus,
         lastSyncTime,
-        conflictData,
         fetchRemoteData,
         pushData,
         pushCalendar,
         fetchCalendar,
         pushAll,
         syncOnLogin,
-        resolveConflict,
     }
 }

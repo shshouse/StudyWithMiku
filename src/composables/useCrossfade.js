@@ -245,12 +245,19 @@ export const useCrossfade = () => {
     })
   }
 
-  const fadeMusicOut = (ap, durationInSec = 2) => {
+  const shouldAnimateAudio = () => typeof document === 'undefined' || document.visibilityState === 'visible'
+
+  const fadeMusicOut = (ap, durationInSec = 2, options = {}) => {
     if (!ap || ap.audio.paused) return
     if (isCrossfading) cleanup(ap)
     if (fadeAnimationId) { cancelAnimationFrame(fadeAnimationId); fadeAnimationId = null }
     const origVol = ap.audio.volume
     ap._fadeLastVolume = origVol
+    if (options.immediate || !shouldAnimateAudio()) {
+      ap.audio.volume = 0
+      try { ap.pause() } catch (e) { }
+      return
+    }
     const start = Date.now()
     const tgt = durationInSec * 1000
     const outAnim = () => {
@@ -262,10 +269,15 @@ export const useCrossfade = () => {
     fadeAnimationId = requestAnimationFrame(outAnim)
   }
 
-  const fadeMusicIn = (ap, targetVol = null, durationInSec = 2) => {
+  const fadeMusicIn = (ap, targetVol = null, durationInSec = 2, options = {}) => {
     if (!ap) return
     if (fadeAnimationId) { cancelAnimationFrame(fadeAnimationId); fadeAnimationId = null }
     const finalVol = targetVol !== null ? targetVol : (ap._fadeLastVolume || 0.7)
+    if (options.immediate || !shouldAnimateAudio()) {
+      ap.audio.volume = finalVol
+      if (ap.audio.paused) { try { const p = ap.play(); if (p && p.catch) p.catch(() => { }) } catch (e) { } }
+      return
+    }
     ap.audio.volume = 0
     if (ap.audio.paused) { try { const p = ap.play(); if (p && p.catch) p.catch(() => {}) } catch(e) {} }
     const start = Date.now()

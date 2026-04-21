@@ -555,21 +555,83 @@ let phaseEndTime = null
 let lastRecordedTimeLeft = 0
 let hitokotoInterval = null
 let wasMusicPlayingBeforeBreak = false
+const isPageVisible = () => typeof document==='undefined'||document.visibilityState==='visible'
+const getPhaseDuration = (status = currentStatus.value) => {
+  if (status === STATUS.FOCUS) return focusDuration.value * 60
+  if (status === STATUS.LONG_BREAK) return breakDuration.value * 60 * 2
+  return breakDuration.value * 60
+}
+const saveCurrentMusicPauseSettings = () => saveMusicPauseSettings(pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value)
+const recordFocusElapsed = (seconds) => {
+  if (seconds <= 0) return
+  studyTimeCounter += seconds
+  if (studyTimeCounter >= 60) {
+    addStudyTime(Math.floor(studyTimeCounter / 60) * 60)
+    studyTimeCounter = studyTimeCounter % 60
+  }
+}
+const flushStudyTimeCounter = () => {
+  if (studyTimeCounter > 0) {
+    addStudyTime(studyTimeCounter)
+    studyTimeCounter = 0
+  }
+}
+const clearScheduledTick = () => {
+  if (timer) { clearTimeout(timer); timer = null }
+}
+const shouldApplyImmediateAudioTransition = (completedAt) => !isPageVisible() || !!(completedAt && Date.now() - completedAt > 1500)
+const updateMusicForPhaseTransition = (completedStatus, completedAt) => {
+  const ap = getAPlayerInstance()
+  const immediate = shouldApplyImmediateAudioTransition(completedAt)
+  if (completedStatus === STATUS.FOCUS) {
+    if (!pauseMusicDuringBreak.value) {
+      wasMusicPlayingBeforeBreak = false
+      return
+    }
+    wasMusicPlayingBeforeBreak = !!(ap && !ap.audio.paused)
+    if (ap) fadeMusicOut(ap, 2, { immediate })
+    return
+  }
+  if (pauseMusicDuringBreak.value && wasMusicPlayingBeforeBreak && ap) {
+    fadeMusicIn(ap, null, 2, { immediate })
+  }
+  wasMusicPlayingBeforeBreak = false
+}
+const notifyPhaseComplete = (completedStatus, completedAt) => {
+  if (isPageVisible() && completedAt && Date.now() - completedAt > 1500) return
+  playNotificationSound()
+  const statusTextMap = { [STATUS.FOCUS]: '专注', [STATUS.BREAK]: '休息', [STATUS.LONG_BREAK]: '长休' }
+  const alertMsg = `${statusTextMap[completedStatus]}已完成！`
+  try { if ('Notification' in window && Notification.permission === 'granted') new Notification('番茄钟', { body: alertMsg, icon: '/favicon.ico' }) } catch(e) {}
+}
+const moveToNextPhase = (completedStatus, completedAt) => {
+  if (completedStatus === STATUS.FOCUS) {
+    completedPomodoros.value++
+    addPomodoro()
+    currentStatus.value = completedPomodoros.value % 4 === 0 ? STATUS.LONG_BREAK : STATUS.BREAK
+  } else {
+    currentStatus.value = STATUS.FOCUS
+  }
+  timeLeft.value = getPhaseDuration(currentStatus.value)
+  lastRecordedTimeLeft = timeLeft.value
+  phaseEndTime = completedAt + timeLeft.value * 1000
+  updateMusicForPhaseTransition(completedStatus, completedAt)
+}
 
-watch(focusDuration, (newVal) => { if (currentStatus.value === STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(newVal, breakDuration.value, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
-watch(breakDuration, (newVal) => { if (currentStatus.value !== STATUS.FOCUS && !isRunning.value) timeLeft.value = newVal * 60; savePomodoroSettings(focusDuration.value, newVal, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
-watch([pauseMusicDuringBreak], () => { saveMusicPauseSettings(pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
+watch(focusDuration, (newVal) => { if (currentStatus.value === STATUS.FOCUS && !isRunning.value) timeLeft.value = getPhaseDuration(STATUS.FOCUS); savePomodoroSettings(newVal, breakDuration.value, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
+watch(breakDuration, (newVal) => { if (currentStatus.value !== STATUS.FOCUS && !isRunning.value) timeLeft.value = getPhaseDuration(currentStatus.value); savePomodoroSettings(focusDuration.value, newVal, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
+watch([pauseMusicDuringBreak], () => { saveCurrentMusicPauseSettings(); triggerSync() })
 watch(hidePomodoroOnIdle, (newVal) => {
   if (newVal) {
     document.addEventListener('mousemove', handleGlobalMouseMove)
   } else {
     document.removeEventListener('mousemove', handleGlobalMouseMove)
   }
-  saveMusicPauseSettings(pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value)
+  saveCurrentMusicPauseSettings()
   triggerSync()
 })
 watch(showHitokoto, () => {
-  saveMusicPauseSettings(pauseMusicOnFocusEnd.value, pauseMusicOnBreakEnd.value, hidePomodoroOnIdle.value, showHitokoto.value)
+  saveCurrentMusicPauseSettings()
   triggerSync()
   if (showHitokoto.value) {
     showHitokotoAnimation.value = true
@@ -589,13 +651,12 @@ const formattedSeconds = computed(() => (timeLeft.value % 60).toString().padStar
 const statusText = computed(() => ({ [STATUS.FOCUS]: '专注', [STATUS.BREAK]: '休息', [STATUS.LONG_BREAK]: '长休' }[currentStatus.value] || '专注'))
 const statusClass = computed(() => ({ [STATUS.FOCUS]: 'focus', [STATUS.BREAK]: 'break', [STATUS.LONG_BREAK]: 'long-break' }[currentStatus.value] || 'focus'))
 const circumference = computed(() => 2 * Math.PI * 54)
-const strokeDashoffset = computed(() => { const totalTime = currentStatus.value === STATUS.FOCUS ? focusDuration.value * 60 : breakDuration.value * 60; return circumference.value * (1 - (totalTime - timeLeft.value) / totalTime) })
-
+const strokeDashoffset = computed(() => { const totalTime = getPhaseDuration(currentStatus.value); return circumference.value * (1 - (totalTime - timeLeft.value) / totalTime) })
 const toggleSettings = () => { showSettings.value = !showSettings.value }
 const closeSettings = () => { showSettings.value = false }
 
 const scheduleNextTick = () => {
-  if (timer) { clearTimeout(timer); timer = null }
+  clearScheduledTick()
   if (!isRunning.value || !phaseEndTime) return
   const msRemaining = phaseEndTime - Date.now()
   const delay = msRemaining <= 0 ? 0 : (msRemaining % 1000 || 1000)
@@ -603,24 +664,39 @@ const scheduleNextTick = () => {
 }
 const timerUpdate = () => {
   if (!isRunning.value || !phaseEndTime) return
+  clearScheduledTick()
   const now = Date.now()
-  const remaining = Math.max(0, Math.ceil((phaseEndTime - now) / 1000))
-  const elapsed = lastRecordedTimeLeft - remaining
-  if (currentStatus.value === STATUS.FOCUS && elapsed > 0) {
-    studyTimeCounter += elapsed
-    if (studyTimeCounter >= 60) {
-      addStudyTime(Math.floor(studyTimeCounter / 60) * 60)
-      studyTimeCounter = studyTimeCounter % 60
+  const completedPhases = []
+  let guard = 0
+
+  while (isRunning.value && phaseEndTime && now >= phaseEndTime && guard < 100) {
+    const completedStatus = currentStatus.value
+    const completedAt = phaseEndTime
+    if (completedStatus === STATUS.FOCUS && lastRecordedTimeLeft > 0) {
+      recordFocusElapsed(lastRecordedTimeLeft)
+      flushStudyTimeCounter()
     }
+    completedPhases.push({ completedStatus, completedAt })
+    moveToNextPhase(completedStatus, completedAt)
+    guard++
   }
+
+  if (completedPhases.length > 0) {
+    const lastCompletion = completedPhases[completedPhases.length - 1]
+    const shouldNotify = completedPhases.length === 1
+      ? true
+      : !isPageVisible()
+    if (shouldNotify) notifyPhaseComplete(lastCompletion.completedStatus, lastCompletion.completedAt)
+  }
+
+  if (!isRunning.value || !phaseEndTime) return
+
+  const remaining = Math.max(0, Math.ceil((phaseEndTime - now) / 1000))
+  const elapsed = Math.max(0, lastRecordedTimeLeft - remaining)
+  if (currentStatus.value === STATUS.FOCUS && elapsed > 0) recordFocusElapsed(elapsed)
   timeLeft.value = remaining
   lastRecordedTimeLeft = remaining
-  if (remaining <= 0) {
-    if (currentStatus.value === STATUS.FOCUS && studyTimeCounter > 0) { addStudyTime(studyTimeCounter); studyTimeCounter = 0 }
-    handleTimerComplete()
-  } else {
-    scheduleNextTick()
-  }
+  scheduleNextTick()
 }
 const preloadNotificationAudio = () => {
   try {
@@ -645,54 +721,34 @@ const startTimer = () => {
 }
 const pauseTimer = () => {
   isRunning.value = false
-  if (currentStatus.value === STATUS.FOCUS && studyTimeCounter > 0) { addStudyTime(studyTimeCounter); studyTimeCounter = 0 }
   if (phaseEndTime) {
-    timeLeft.value = Math.max(0, Math.ceil((phaseEndTime - Date.now()) / 1000))
+    const remaining = Math.max(0, Math.ceil((phaseEndTime - Date.now()) / 1000))
+    const elapsed = Math.max(0, lastRecordedTimeLeft - remaining)
+    if (currentStatus.value === STATUS.FOCUS && elapsed > 0) recordFocusElapsed(elapsed)
+    timeLeft.value = remaining
+    lastRecordedTimeLeft = remaining
+  }
+  if (currentStatus.value === STATUS.FOCUS) flushStudyTimeCounter()
+  if (phaseEndTime) {
     phaseEndTime = null
   }
-  if (timer) { clearTimeout(timer); timer = null }
+  clearScheduledTick()
 }
-const resetTimer = () => { pauseTimer(); timeLeft.value = focusDuration.value * 60; currentStatus.value = STATUS.FOCUS }
-const handleTimerComplete = () => {
-  playNotificationSound()
-  const completedStatus = currentStatus.value
-  
-  // 清理当前计时器但保持运行状态
-  if (timer) { clearTimeout(timer); timer = null }
-  phaseEndTime = null
-  
-  if (currentStatus.value === STATUS.FOCUS) {
-    completedPomodoros.value++
-    addPomodoro()
-    if (completedPomodoros.value % 4 === 0) { currentStatus.value = STATUS.LONG_BREAK; timeLeft.value = breakDuration.value * 60 * 2 }
-    else { currentStatus.value = STATUS.BREAK; timeLeft.value = breakDuration.value * 60 }
-    if (pauseMusicDuringBreak.value) {
-      const ap = getAPlayerInstance()
-      wasMusicPlayingBeforeBreak = ap && !ap.audio.paused
-      if (ap) fadeMusicOut(ap, 2)
-    }
-  } else {
-    currentStatus.value = STATUS.FOCUS
-    timeLeft.value = focusDuration.value * 60
-    if (pauseMusicDuringBreak.value && wasMusicPlayingBeforeBreak) {
-      const ap = getAPlayerInstance()
-      if (ap) fadeMusicIn(ap, null, 2)
-    }
-    wasMusicPlayingBeforeBreak = false
-  }
-  
-  const statusTextMap = { [STATUS.FOCUS]: '专注', [STATUS.BREAK]: '休息', [STATUS.LONG_BREAK]: '长休' }
-  const alertMsg = `${statusTextMap[completedStatus]}已完成！`
-  try { if ('Notification' in window && Notification.permission === 'granted') new Notification('番茄钟', { body: alertMsg, icon: '/favicon.ico' }) } catch(e) {}
-  
-  // 重新启动计时器
-  studyTimeCounter = 0
-  lastRecordedTimeLeft = timeLeft.value
-  phaseEndTime = Date.now() + timeLeft.value * 1000
-  isRunning.value = true
-  scheduleNextTick()
-}
+const resetTimer = () => { pauseTimer(); timeLeft.value = focusDuration.value * 60; lastRecordedTimeLeft = 0; currentStatus.value = STATUS.FOCUS }
 const playNotificationSound = () => {
+  if (!isPageVisible()) {
+    try {
+      if (preloadedAudio) {
+        preloadedAudio.currentTime = 0
+        preloadedAudio.volume = 1
+        preloadedAudio.play().catch(() => {})
+      } else {
+        const audio = new Audio('/BreakOrWork.mp3')
+        audio.play().catch(() => {})
+      }
+    } catch (e) {}
+    return
+  }
   duckMusicForNotification(3000)
   setTimeout(() => {
     try {
@@ -762,7 +818,7 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 onUnmounted(() => {
-  if (timer) clearTimeout(timer)
+  clearScheduledTick()
   if (timeInterval) clearInterval(timeInterval)
   if (hitokotoInterval) clearInterval(hitokotoInterval)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
