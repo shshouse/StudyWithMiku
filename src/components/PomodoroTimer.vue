@@ -285,12 +285,14 @@
                 </div>
               </div>
               </transition>
-            </div>
   </div>
+</div>
 </div>
 </div>
 </transition>
 <transition name="fade">
+  <div v-if="showSyncToast" class="sync-toast">
+    <div class="sync-toast-icon"></div>
     <div class="sync-toast-body">
       <div class="sync-toast-title">学习数据自动同步完成</div>
       <div class="sync-toast-subtitle">欢迎回来！Miku 等你许久了 &gt;﹏&lt;</div>
@@ -301,20 +303,20 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
-import { useOnlineCount } from '../composables/useOnlineCount.js'
-import { useMusic } from '../composables/useMusic.js'
-import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
-import { useCrossfade } from '../composables/useCrossfade.js'
-import { getPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings } from '../utils/userSettings.js'
-import { recommendPlaylists, LATEST_PLAYLIST_VERSION } from '../data/playlists.js'
-import { LATEST_UPDATE_VERSION } from '../data/updates.js'
-import { getRandomQuote } from '../data/quotes.js'
-import Updates from './Updates.vue'
-import StudyCalendar from './StudyCalendar.vue'
-import { useStudyAuth } from '../composables/useStudyAuth.js'
-import { useStudySync } from '../composables/useStudySync.js'
-import { useCalendar } from '../composables/useCalendar.js'
+  import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
+  import { useOnlineCount } from '../composables/useOnlineCount.js'
+  import { useMusic } from '../composables/useMusic.js'
+  import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
+  import { useCrossfade } from '../composables/useCrossfade.js'
+  import { getPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings } from '../utils/userSettings.js'
+  import { recommendPlaylists, LATEST_PLAYLIST_VERSION } from '../data/playlists.js'
+  import { LATEST_UPDATE_VERSION } from '../data/updates.js'
+  import { getRandomQuote } from '../data/quotes.js'
+  import Updates from './Updates.vue'
+  import StudyCalendar from './StudyCalendar.vue'
+  import { useStudyAuth } from '../composables/useStudyAuth.js'
+  import { useStudySync } from '../composables/useStudySync.js'
+  import { useCalendar } from '../composables/useCalendar.js'
 
 const UPDATE_READ_KEY = 'last_read_update'
 const PLAYLIST_READ_KEY = 'last_read_playlist'
