@@ -286,35 +286,18 @@
               </div>
               </transition>
             </div>
-          </div>
-        </div>
-      </div>
-    </transition>
-    <transition name="fade">
-      <div v-if="showConflictModal" class="conflict-modal-overlay">
-        <div class="conflict-modal">
-          <h3>数据冲突了！</h3>
-          <p>检测到云端有不同的学习数据，想把哪一份保存到云端呢ヽ(✿ﾟ▽ﾟ)ノ</p>
-          <div class="conflict-data-comparison">
-            <div class="data-column local">
-              <h4>本地数据</h4>
-              <div>总学习: {{ formatStudyTime(studyStats.totalStudyTime) }}</div>
-              <div>总番茄: {{ studyStats.totalPomodoros }}</div>
-            </div>
-            <div class="data-column remote">
-              <h4>云端数据</h4>
-              <div>总学习: {{ formatStudyTime(conflictData?.stats?.totalStudyTime || 0) }}</div>
-              <div>总番茄: {{ conflictData?.stats?.totalPomodoros || 0 }}</div>
-            </div>
-          </div>
-          <div class="conflict-actions">
-            <button class="action-btn use-local-btn" @click="handleResolveConflict('local')">使用本地数据</button>
-            <button class="action-btn use-remote-btn" @click="handleResolveConflict('remote')">使用云端数据</button>
-          </div>
-        </div>
-      </div>
-    </transition>
   </div>
+</div>
+</div>
+</transition>
+<transition name="fade">
+    <div class="sync-toast-body">
+      <div class="sync-toast-title">学习数据自动同步完成</div>
+      <div class="sync-toast-subtitle">欢迎回来！Miku 等你许久了 &gt;﹏&lt;</div>
+    </div>
+  </div>
+</transition>
+</div>
 </template>
 
 <script setup>
@@ -377,11 +360,17 @@ const props = defineProps({
 const { token, username, isLoggedIn, login, logout, isTokenExpired } = useStudyAuth()
 const { onlineCount, adminOnline, isConnected } = useOnlineCount(import.meta.env.VITE_WS_URL, { username })
 const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS } = useMusic()
-const { syncStatus, lastSyncTime, conflictData, syncOnLogin, resolveConflict, pushData, pushCalendar, fetchCalendar, pushAll } = useStudySync()
+const { syncStatus, lastSyncTime, syncOnLogin, pushData, pushCalendar, fetchCalendar, pushAll } = useStudySync()
 const { crossfadeEnabled, toggleCrossfade, fadeMusicOut, fadeMusicIn } = useCrossfade()
 const { recordStudyTime: calendarRecordStudy, recordPomodoro: calendarRecordPomodoro, getCalendarData, setCalendarData } = useCalendar()
 
-const showConflictModal = ref(false)
+const showSyncToast = ref(false)
+let syncToastTimer = null
+const triggerSyncToast = () => {
+  showSyncToast.value = true
+  if (syncToastTimer) clearTimeout(syncToastTimer)
+  syncToastTimer = setTimeout(() => { showSyncToast.value = false }, 2500)
+}
 
 const syncStatusText = computed(() => {
   if (syncStatus.value === 'syncing') return '同步中...'
@@ -408,21 +397,18 @@ const manualSync = async () => {
   await pushAll(studyStats, todos.value, getPomodoroSettings(), getCalendarData())
 }
 
-const handleResolveConflict = async (choice, remoteDataObj = null) => {
-  const remote = remoteDataObj || await resolveConflict(choice, studyStats, todos.value, getPomodoroSettings())
-  if (choice === 'remote' && remote) {
-    if (remote.stats) { Object.assign(studyStats, remote.stats); saveStats(false) }
-    if (remote.todos) { todos.value = remote.todos; saveTodos(false) }
-    if (remote.settings) {
-      savePomodoroSettings(remote.settings.focusDuration || 25, remote.settings.breakDuration || 5, remote.settings.pauseMusicDuringBreak ?? false, remote.settings.hidePomodoroOnIdle || false, remote.settings.showHitokoto || false)
-      focusDuration.value = remote.settings.focusDuration || 25
-      breakDuration.value = remote.settings.breakDuration || 5
-      pauseMusicDuringBreak.value = remote.settings.pauseMusicDuringBreak ?? false
-      hidePomodoroOnIdle.value = remote.settings.hidePomodoroOnIdle || false
-      showHitokoto.value = remote.settings.showHitokoto || false
-    }
+const applyRemoteData = (remote) => {
+  if (!remote) return
+  if (remote.stats) { Object.assign(studyStats, remote.stats); saveStats(false) }
+  if (remote.todos) { todos.value = remote.todos; saveTodos(false) }
+  if (remote.settings) {
+    savePomodoroSettings(remote.settings.focusDuration || 25, remote.settings.breakDuration || 5, remote.settings.pauseMusicDuringBreak ?? false, remote.settings.hidePomodoroOnIdle || false, remote.settings.showHitokoto || false)
+    focusDuration.value = remote.settings.focusDuration || 25
+    breakDuration.value = remote.settings.breakDuration || 5
+    pauseMusicDuringBreak.value = remote.settings.pauseMusicDuringBreak ?? false
+    hidePomodoroOnIdle.value = remote.settings.hidePomodoroOnIdle || false
+    showHitokoto.value = remote.settings.showHitokoto || false
   }
-  showConflictModal.value = false
 }
 
 const inputPlaylistId = ref('')
@@ -769,13 +755,11 @@ const onUITouchStart = () => { setHoveringUI(true) }
 const onUITouchEnd = () => { setHoveringUI(false) }
 
 onMounted(async () => {
+  if (import.meta.env.DEV) triggerSyncToast()
   if (isLoggedIn.value && !isTokenExpired()) {
-    const { needResolve, applyRemote } = await syncOnLogin(studyStats, todos.value, getPomodoroSettings())
-    if (needResolve) {
-      showConflictModal.value = true
-    } else if (applyRemote) {
-      await handleResolveConflict('remote', applyRemote)
-    }
+    const { autoMerged, applyRemote } = await syncOnLogin(studyStats, todos.value, getPomodoroSettings())
+    if (applyRemote) applyRemoteData(applyRemote)
+    if (autoMerged) triggerSyncToast()
     const remoteCalendar = await fetchCalendar()
     if (remoteCalendar) {
       const local = getCalendarData()
@@ -821,6 +805,7 @@ onUnmounted(() => {
   clearScheduledTick()
   if (timeInterval) clearInterval(timeInterval)
   if (hitokotoInterval) clearInterval(hitokotoInterval)
+  if (syncToastTimer) { clearTimeout(syncToastTimer); syncToastTimer = null }
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 const handleVisibilityChange = () => {
@@ -1329,18 +1314,73 @@ const handleVisibilityChange = () => {
 .logout-btn { background: rgba(231, 76, 60, 0.3); border-color: rgba(231, 76, 60, 0.5); }
 @keyframes blink { from { opacity: 0.5; } to { opacity: 1; } }
 
-.conflict-modal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; border-radius: 20px; backdrop-filter: blur(5px); }
-.conflict-modal { background: #2c3e50; padding: 1.5rem; border-radius: 15px; width: 90%; max-width: 400px; color: white; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); }
-.conflict-modal h3 { margin-top: 0; color: #ff6b6b; margin-bottom: 0.5rem; }
-.conflict-modal p { font-size: 0.9rem; opacity: 0.8; margin-bottom: 1.2rem; }
-.conflict-data-comparison { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
-.data-column { flex: 1; padding: 1rem; border-radius: 8px; background: rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 0.4rem; }
-.data-column h4 { margin: 0 0 0.5rem 0; font-size: 0.9rem; opacity: 0.9; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.3rem; }
-.data-column div { font-size: 0.85rem; font-family: monospace; }
-.data-column.local { border-left: 3px solid #ff9f43; }
-.data-column.remote { border-left: 3px solid #4ecdc4; }
-.conflict-actions { display: flex; flex-direction: column; gap: 0.8rem; }
-.use-local-btn { background: rgba(255, 159, 67, 0.2); border-color: #ff9f43; }
-.use-remote-btn { background: rgba(78, 205, 196, 0.2); border-color: #4ecdc4; }
-
+.sync-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  text-align: center;
+  padding: 0.85rem 1.2rem;
+  min-width: 260px;
+  max-width: calc(100vw - 2rem);
+  box-sizing: border-box;
+  color: white;
+  font-family: inherit;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 14px;
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: sync-toast-pop 0.35s cubic-bezier(0.22, 1.3, 0.36, 1);
+}
+.sync-toast-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: white;
+  background: linear-gradient(135deg, #4ecdc4, #2ecc71);
+  box-shadow: 0 4px 12px rgba(46, 204, 113, 0.35);
+}
+.sync-toast-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.sync-toast-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+}
+.sync-toast-subtitle {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.72);
+}
+@keyframes sync-toast-pop {
+  0% { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(0.96); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@media (max-width: 480px) {
+  .sync-toast {
+    min-width: 0;
+    padding: 0.75rem 1rem;
+    gap: 0.6rem;
+  }
+  .sync-toast-icon { width: 24px; height: 24px; }
+  .sync-toast-title { font-size: 0.88rem; }
+  .sync-toast-subtitle { font-size: 0.76rem; }
+}
 </style>

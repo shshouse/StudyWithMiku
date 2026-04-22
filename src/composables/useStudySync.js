@@ -5,7 +5,6 @@ const MIKUMOD_API = import.meta.env.VITE_MIKUMOD_URL || 'https://mikumod.com'
 
 const syncStatus = ref('idle')
 const lastSyncTime = ref(null)
-const conflictData = ref(null)
 
 export function useStudySync() {
     const { token, isLoggedIn, getAuthHeaders, logout } = useStudyAuth()
