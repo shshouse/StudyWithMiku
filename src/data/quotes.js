@@ -2,9 +2,12 @@ export const quotesList = [
   // { text: '', source: '' },
   { text: '学习25分钟，休息5分钟的番茄工作法有利于保持注意力集中呢', source: '松灰酸' },
   { text: '一言也可以投稿哦，投稿邮箱shshouse@mikumod.com', source: '松灰酸' },
+  { text: '世界以痛吻我，我却报之以歌', source: '松灰酸' },
   { text: '品味当下，笑一笑吧', source: '兽娘红茶馆' },
   { text: '幸福一旦退去，哀伤便一览无余', source: '兽娘红茶馆' },
   { text: '在这里，不存在由人类发明的匆忙，时间只会以它最古老的方式平和地流淌', source: '兽娘红茶馆' },
+  { text: '对生活不失希望，微笑面对困境与磨难，心怀梦想，即使遥远', source: '江江！' },
+  { text: '窝想待在你身边，就像阳光总得配上沙滩', source: '江江！' },
 
   { text: '醉云间，听雨眠', source: '' },//by 清辞慕染
   { text: '寐雨稠謀声作曲，悠悠我心潇自在', source: '' },//by 清辞慕染
