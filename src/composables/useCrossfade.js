@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 
-const CROSSFADE_DURATION = 5
+const CROSSFADE_DURATION = 6
+const PRELOAD_LEAD_TIME = 20
 const CROSSFADE_KEY = 'crossfade_enabled'
 
 const crossfadeEnabled = ref(localStorage.getItem(CROSSFADE_KEY) !== 'false')
@@ -22,6 +23,10 @@ export const useCrossfade = () => {
     crossfadeEnabled.value = val
     localStorage.setItem(CROSSFADE_KEY, val)
   }
+
+  const getLoopMode = (ap) => ap.setting ? ap.setting.loop : (ap.options ? ap.options.loop : 'all')
+
+  const clampVolume = (volume) => Math.max(0, Math.min(1, volume))
 
   const destroyCrossfadeAudio = () => {
     if (crossfadeAudio) {
@@ -67,7 +72,7 @@ export const useCrossfade = () => {
     if (origTrigger) return
     origTrigger = ap.events.trigger.bind(ap.events)
     ap.events.trigger = (event, data) => {
-      const loop = ap.setting ? ap.setting.loop : (ap.options ? ap.options.loop : 'all')
+      const loop = getLoopMode(ap)
       if (event === 'ended' && isCrossfading && loop !== 'one') {
         handleCrossfadeEnd(ap)
         return
@@ -109,46 +114,82 @@ export const useCrossfade = () => {
 
     let handoffDone = false
     let handoffTimer = null
+    let seekTimer = null
+    let activeAudio = null
 
     const finishHandoff = () => {
       if (handoffDone || !handoffAudio) return
       handoffDone = true
       if (handoffTimer) { clearTimeout(handoffTimer); handoffTimer = null }
-      ap.audio.volume = targetVolume
+      if (seekTimer) { clearTimeout(seekTimer); seekTimer = null }
+      if (activeAudio) {
+        activeAudio.removeEventListener('loadedmetadata', doSeekAndHandoff)
+        activeAudio.removeEventListener('canplay', doSeekAndHandoff)
+        activeAudio.removeEventListener('seeked', finishHandoff)
+        activeAudio = null
+      }
       handoffAudio.pause()
       handoffAudio.src = ''
       handoffAudio = null
+      ap.audio.volume = targetVolume
       isHandingOff = false
       ap.play()
     }
 
     const doSeekAndHandoff = () => {
       if (handoffDone || !handoffAudio) return
-      ap.audio.currentTime = handoffAudio.currentTime
-      if (!ap.audio.seeking) {
+      activeAudio = ap.audio
+      const targetTime = Math.max(0, handoffAudio.currentTime)
+
+      try {
+        activeAudio.currentTime = targetTime
+      } catch (e) {
+        handoffTimer = setTimeout(doSeekAndHandoff, 250)
+        return
+      }
+
+      if (!activeAudio.seeking || Math.abs(activeAudio.currentTime - targetTime) < 0.25) {
         finishHandoff()
       } else {
-        ap.audio.addEventListener('seeked', finishHandoff, { once: true })
-        handoffTimer = setTimeout(() => finishHandoff(), 3000)
+        activeAudio.addEventListener('seeked', finishHandoff, { once: true })
+        seekTimer = setTimeout(() => finishHandoff(), 3000)
       }
     }
 
-    if (ap.audio.readyState >= 3) {
-      doSeekAndHandoff()
-    } else {
-      ap.audio.addEventListener('canplay', doSeekAndHandoff, { once: true })
-      handoffTimer = setTimeout(() => finishHandoff(), 5000)
+    const armHandoff = () => {
+      activeAudio = ap.audio
+      ap.audio.volume = 0
+      try {
+        const playPromise = ap.play()
+        if (playPromise && playPromise.catch) playPromise.catch(() => { })
+      } catch (e) { }
+
+      if (activeAudio.readyState >= 1) {
+        doSeekAndHandoff()
+      } else {
+        activeAudio.addEventListener('loadedmetadata', doSeekAndHandoff, { once: true })
+        activeAudio.addEventListener('canplay', doSeekAndHandoff, { once: true })
+        handoffTimer = setTimeout(doSeekAndHandoff, 5000)
+      }
     }
+
+    setTimeout(armHandoff, 0)
   }
 
   const startCrossfade = (ap) => {
-    if (ap.loop === 'one' || ap.list.audios.length <= 1) return
+    if (getLoopMode(ap) === 'one' || ap.list.audios.length <= 1) return
     const nextIndex = ap.nextIndex()
     if (nextIndex === undefined || nextIndex === null) return
 
+    const audio = ap.audio
+    if (!audio || !Number.isFinite(audio.duration)) return
+
+    const remaining = audio.duration - audio.currentTime
+    if (remaining <= 0.5 || remaining > CROSSFADE_DURATION + 0.5) return
+
     isCrossfading = true
     crossfadeNextIndex = nextIndex
-    targetVolume = ap.audio.volume
+    targetVolume = audio.volume
     interceptTrigger(ap)
 
     const nextSong = ap.list.audios[nextIndex]
@@ -161,13 +202,14 @@ export const useCrossfade = () => {
       crossfadeAudio = new Audio(nextSong.url)
       crossfadeAudio.preload = 'auto'
     }
-    crossfadeAudio.volume = 0
+    crossfadeAudio.currentTime = 0
+    crossfadeAudio.volume = clampVolume(targetVolume * 0.5)
     crossfadeAudio.play().catch(() => {
       cleanup(ap)
     })
 
     const startTime = Date.now()
-    const duration = CROSSFADE_DURATION * 1000
+    const duration = Math.max(0.2, Math.min(CROSSFADE_DURATION, remaining)) * 1000
 
     const animate = () => {
       if (!isCrossfading) return
@@ -177,9 +219,9 @@ export const useCrossfade = () => {
         ? 2 * progress * progress
         : 1 - Math.pow(-2 * progress + 2, 2) / 2
 
-      ap.audio.volume = Math.max(0, targetVolume * Math.cos(ease * Math.PI / 2))
+      ap.audio.volume = clampVolume(targetVolume * (1 - ease))
       if (crossfadeAudio) {
-        crossfadeAudio.volume = targetVolume * Math.sin(ease * Math.PI / 2)
+        crossfadeAudio.volume = clampVolume(targetVolume * (0.5 + 0.5 * ease))
       }
 
       if (progress < 1) {
@@ -196,8 +238,9 @@ export const useCrossfade = () => {
       if (!crossfadeEnabled.value || isCrossfading || handoffAudio) return
       const audio = ap.audio
       const remaining = audio.duration - audio.currentTime
-      if (remaining <= 15 && remaining > CROSSFADE_DURATION + 1 && audio.duration > CROSSFADE_DURATION + 2 && !preloadedAudioEl) {
-        const loop = ap.setting ? ap.setting.loop : (ap.options ? ap.options.loop : 'all')
+      if (!Number.isFinite(remaining)) return
+      if (remaining <= PRELOAD_LEAD_TIME && remaining > CROSSFADE_DURATION + 1 && audio.duration > CROSSFADE_DURATION + 2 && !preloadedAudioEl) {
+        const loop = getLoopMode(ap)
         const idx = ap.nextIndex()
         if (idx !== undefined && idx !== null && loop !== 'one' && ap.list.audios.length > 1) {
           preloadedAudioEl = new Audio(ap.list.audios[idx].url)
@@ -211,7 +254,7 @@ export const useCrossfade = () => {
         audio.duration > CROSSFADE_DURATION + 2 &&
         !crossfadeTriggered
       ) {
-        const loop = ap.setting ? ap.setting.loop : (ap.options ? ap.options.loop : 'all')
+        const loop = getLoopMode(ap)
         if (loop !== 'one') {
           crossfadeTriggered = true
           startCrossfade(ap)
@@ -220,12 +263,16 @@ export const useCrossfade = () => {
       if (remaining > CROSSFADE_DURATION + 1) {
         crossfadeTriggered = false
       }
-      if (remaining > 15) {
+      if (remaining > PRELOAD_LEAD_TIME) {
         destroyPreloadedAudio()
       }
     })
 
     ap.on('listswitch', () => {
+      if (isHandingOff) {
+        crossfadeTriggered = false
+        return
+      }
       if (isCrossfading || handoffAudio) {
         cleanup(ap)
       }
