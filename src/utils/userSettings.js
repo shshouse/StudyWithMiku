@@ -48,6 +48,10 @@ export const getPomodoroSettings = () => {
   return getSettings().pomodoro
 }
 
+export const getDefaultPomodoroSettings = () => {
+  return { ...defaultSettings.pomodoro }
+}
+
 export const saveMusicPauseSettings = (pauseMusicDuringBreak, hidePomodoroOnIdle, showHitokoto) => {
   const settings = getSettings()
   settings.pomodoro.pauseMusicDuringBreak = pauseMusicDuringBreak

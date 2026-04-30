@@ -308,7 +308,7 @@
   import { useMusic } from '../composables/useMusic.js'
   import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
   import { useCrossfade } from '../composables/useCrossfade.js'
-  import { getPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings } from '../utils/userSettings.js'
+  import { getPomodoroSettings, getDefaultPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings } from '../utils/userSettings.js'
   import { recommendPlaylists, LATEST_PLAYLIST_VERSION } from '../data/playlists.js'
   import { LATEST_UPDATE_VERSION } from '../data/updates.js'
   import { getRandomQuote } from '../data/quotes.js'
@@ -406,14 +406,25 @@ const applyRemoteData = (remote) => {
   if (remote.stats) { Object.assign(studyStats, remote.stats); saveStats(false) }
   if (remote.todos) { todos.value = remote.todos; saveTodos(false) }
   if (remote.settings) {
-    savePomodoroSettings(remote.settings.focusDuration || 25, remote.settings.breakDuration || 5, remote.settings.pauseMusicDuringBreak ?? false, remote.settings.hidePomodoroOnIdle || false, remote.settings.showHitokoto || false)
-    focusDuration.value = remote.settings.focusDuration || 25
-    breakDuration.value = remote.settings.breakDuration || 5
-    pauseMusicDuringBreak.value = remote.settings.pauseMusicDuringBreak ?? false
-    hidePomodoroOnIdle.value = remote.settings.hidePomodoroOnIdle || false
-    showHitokoto.value = remote.settings.showHitokoto || false
+    const defaults = getDefaultPomodoroSettings()
+    const settings = { ...defaults, ...remote.settings }
+    savePomodoroSettings(settings.focusDuration, settings.breakDuration, settings.pauseMusicDuringBreak, settings.hidePomodoroOnIdle, settings.showHitokoto)
+    focusDuration.value = settings.focusDuration
+    breakDuration.value = settings.breakDuration
+    pauseMusicDuringBreak.value = settings.pauseMusicDuringBreak
+    hidePomodoroOnIdle.value = settings.hidePomodoroOnIdle
+    showHitokoto.value = settings.showHitokoto
   }
   markLocalStudyOwner()
+}
+const resetPomodoroSettings = () => {
+  const defaults = getDefaultPomodoroSettings()
+  savePomodoroSettings(defaults.focusDuration, defaults.breakDuration, defaults.pauseMusicDuringBreak, defaults.hidePomodoroOnIdle, defaults.showHitokoto)
+  focusDuration.value = defaults.focusDuration
+  breakDuration.value = defaults.breakDuration
+  pauseMusicDuringBreak.value = defaults.pauseMusicDuringBreak
+  hidePomodoroOnIdle.value = defaults.hidePomodoroOnIdle
+  showHitokoto.value = defaults.showHitokoto
 }
 
 const inputPlaylistId = ref('')
@@ -803,8 +814,10 @@ onMounted(async () => {
       const remoteData = await fetchRemoteData()
       if (remoteData) {
         applyRemoteData(remoteData)
+        if (!remoteData.settings) resetPomodoroSettings()
       } else {
         resetLocalStudyData()
+        resetPomodoroSettings()
       }
       const remoteCalendar = await fetchCalendar()
       setCalendarData(remoteCalendar || { dailyLog: {}, plans: {} })
