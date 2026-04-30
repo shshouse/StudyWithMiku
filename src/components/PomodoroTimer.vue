@@ -314,7 +314,7 @@
   import { getRandomQuote } from '../data/quotes.js'
   import Updates from './Updates.vue'
   import StudyCalendar from './StudyCalendar.vue'
-  import { useStudyAuth } from '../composables/useStudyAuth.js'
+  import { useStudyAuth, getTokenUserId } from '../composables/useStudyAuth.js'
   import { useStudySync } from '../composables/useStudySync.js'
   import { useCalendar } from '../composables/useCalendar.js'
 
@@ -359,10 +359,10 @@ const props = defineProps({
   }
 })
 
-const { token, username, isLoggedIn, login, logout, isTokenExpired } = useStudyAuth()
+const { token, username, userId, tokenUserChanged, isLoggedIn, login, logout, clearTokenUserChanged, isTokenExpired } = useStudyAuth()
 const { onlineCount, adminOnline, isConnected } = useOnlineCount(import.meta.env.VITE_WS_URL, { username })
 const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS } = useMusic()
-const { syncStatus, lastSyncTime, syncOnLogin, pushData, pushCalendar, fetchCalendar, pushAll } = useStudySync()
+const { syncStatus, lastSyncTime, fetchRemoteData, syncOnLogin, pushCalendar, fetchCalendar, pushAll } = useStudySync()
 const { crossfadeEnabled, toggleCrossfade, fadeMusicOut, fadeMusicIn } = useCrossfade()
 const { recordStudyTime: calendarRecordStudy, recordPomodoro: calendarRecordPomodoro, getCalendarData, setCalendarData } = useCalendar()
 
@@ -388,6 +388,7 @@ const syncStatusText = computed(() => {
 let pushTimeout = null
 const triggerSync = () => {
   if (!isLoggedIn.value) return
+  if (isLocalStudyOwnerMismatch()) return
   if (pushTimeout) clearTimeout(pushTimeout)
   pushTimeout = setTimeout(() => {
     pushAll(studyStats, todos.value, getPomodoroSettings(), getCalendarData())
@@ -396,6 +397,7 @@ const triggerSync = () => {
 
 const manualSync = async () => {
   if (!isLoggedIn.value) return
+  if (isLocalStudyOwnerMismatch()) return
   await pushAll(studyStats, todos.value, getPomodoroSettings(), getCalendarData())
 }
 
@@ -411,6 +413,7 @@ const applyRemoteData = (remote) => {
     hidePomodoroOnIdle.value = remote.settings.hidePomodoroOnIdle || false
     showHitokoto.value = remote.settings.showHitokoto || false
   }
+  markLocalStudyOwner()
 }
 
 const inputPlaylistId = ref('')
@@ -419,6 +422,19 @@ const currentTab = ref('pomodoro')
 const currentHitokoto = ref({ text: '', source: '' })
 const showHitokotoAnimation = ref(false)
 const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', calendar: '学习数据', todos: '待办列表', playlist: '歌单设置', sync: '同步', updates: '更新日志', about: '关于' }[currentTab.value]))
+
+const STUDY_DATA_OWNER_KEY = 'study_data_owner_id'
+const getCurrentStudyUserId = () => userId.value || getTokenUserId(token.value)
+const getLocalStudyOwnerId = () => localStorage.getItem(STUDY_DATA_OWNER_KEY) || ''
+const markLocalStudyOwner = () => {
+  const currentUserId = getCurrentStudyUserId()
+  if (currentUserId) localStorage.setItem(STUDY_DATA_OWNER_KEY, currentUserId)
+}
+const isLocalStudyOwnerMismatch = () => {
+  const currentUserId = getCurrentStudyUserId()
+  const localOwnerId = getLocalStudyOwnerId()
+  return tokenUserChanged.value || (!!currentUserId && !!localOwnerId && currentUserId !== localOwnerId)
+}
 
 const TODOS_KEY = 'study_todos'
 const SHOW_TODO_KEY = 'show_todo_on_clock'
@@ -448,7 +464,7 @@ const currentTodo = computed(() => {
   const uncompletedTodos = todos.value.filter(t => !t.completed)
   return uncompletedTodos[uncompletedTodos.length - 1]
 })
-const saveTodos = (sync = true) => { localStorage.setItem(TODOS_KEY, JSON.stringify(todos.value)); if (sync) triggerSync() }
+const saveTodos = (sync = true) => { markLocalStudyOwner(); localStorage.setItem(TODOS_KEY, JSON.stringify(todos.value)); if (sync) triggerSync() }
 const saveShowTodoOnClock = () => localStorage.setItem(SHOW_TODO_KEY, showTodoOnClock.value.toString())
 const addTodo = () => {
   if (!newTodoText.value.trim()) return
@@ -480,6 +496,7 @@ const deleteTodo = (id) => {
 
 const STATS_KEY = 'study_stats'
 const getToday = () => new Date().toDateString()
+const createDefaultStats = () => ({ totalStudyTime: 0, totalPomodoros: 0, todayStudyTime: 0, todayPomodoros: 0, lastDate: getToday() })
 const loadStats = () => {
   try {
     const saved = localStorage.getItem(STATS_KEY)
@@ -489,10 +506,28 @@ const loadStats = () => {
       return data
     }
   } catch {}
-  return { totalStudyTime: 0, totalPomodoros: 0, todayStudyTime: 0, todayPomodoros: 0, lastDate: getToday() }
+  return createDefaultStats()
 }
 const studyStats = reactive(loadStats())
-const saveStats = (sync = true) => { localStorage.setItem(STATS_KEY, JSON.stringify(studyStats)); if (sync) triggerSync() }
+const saveStats = (sync = true) => { markLocalStudyOwner(); localStorage.setItem(STATS_KEY, JSON.stringify(studyStats)); if (sync) triggerSync() }
+const resetLocalStudyData = () => {
+  Object.assign(studyStats, createDefaultStats())
+  todos.value = []
+  saveStats(false)
+  saveTodos(false)
+}
+const backupLocalStudyData = () => {
+  try {
+    localStorage.setItem('study_owner_mismatch_backup', JSON.stringify({
+      ownerId: getLocalStudyOwnerId(),
+      currentUserId: getCurrentStudyUserId(),
+      stats: studyStats,
+      todos: todos.value,
+      calendar: getCalendarData(),
+      createdAt: new Date().toISOString(),
+    }))
+  } catch {}
+}
 const addStudyTime = (seconds) => { studyStats.totalStudyTime += seconds; studyStats.todayStudyTime += seconds; saveStats(); calendarRecordStudy(seconds) }
 const addPomodoro = () => { studyStats.totalPomodoros++; studyStats.todayPomodoros++; saveStats(); calendarRecordPomodoro() }
 const resetStats = () => { studyStats.totalStudyTime = 0; studyStats.totalPomodoros = 0; studyStats.todayStudyTime = 0; studyStats.todayPomodoros = 0; studyStats.lastDate = getToday(); saveStats() }
@@ -759,39 +794,58 @@ const onUITouchEnd = () => { setHoveringUI(false) }
 onMounted(async () => {
   if (import.meta.env.DEV) triggerSyncToast()
   if (isLoggedIn.value && !isTokenExpired()) {
-    const { autoMerged, applyRemote } = await syncOnLogin(studyStats, todos.value, getPomodoroSettings())
-    if (applyRemote) applyRemoteData(applyRemote)
-    if (autoMerged) triggerSyncToast()
-    const remoteCalendar = await fetchCalendar()
-    if (remoteCalendar) {
-      const local = getCalendarData()
-      const allDates = new Set([...Object.keys(remoteCalendar.dailyLog || {}), ...Object.keys(local.dailyLog || {})])
-      const mergedLog = {}
-      for (const date of allDates) {
-        const r = remoteCalendar.dailyLog?.[date] || { studyTime: 0, pomodoros: 0 }
-        const l = local.dailyLog?.[date] || { studyTime: 0, pomodoros: 0 }
-        mergedLog[date] = {
-          studyTime: Math.max(r.studyTime || 0, l.studyTime || 0),
-          pomodoros: Math.max(r.pomodoros || 0, l.pomodoros || 0),
-        }
+    if (isLocalStudyOwnerMismatch()) {
+      backupLocalStudyData()
+      if (pushTimeout) {
+        clearTimeout(pushTimeout)
+        pushTimeout = null
       }
-      const allPlanDates = new Set([...Object.keys(remoteCalendar.plans || {}), ...Object.keys(local.plans || {})])
-      const mergedPlans = {}
-      for (const date of allPlanDates) {
-        const rPlans = remoteCalendar.plans?.[date] || []
-        const lPlans = local.plans?.[date] || []
-        const seen = new Set()
-        mergedPlans[date] = []
-        for (const p of [...lPlans, ...rPlans]) {
-          if (!seen.has(p.id)) { seen.add(p.id); mergedPlans[date].push(p) }
-        }
+      const remoteData = await fetchRemoteData()
+      if (remoteData) {
+        applyRemoteData(remoteData)
+      } else {
+        resetLocalStudyData()
       }
-      setCalendarData({ dailyLog: mergedLog, plans: mergedPlans })
-      pushCalendar(mergedLog, mergedPlans)
+      const remoteCalendar = await fetchCalendar()
+      setCalendarData(remoteCalendar || { dailyLog: {}, plans: {} })
+      markLocalStudyOwner()
+      clearTokenUserChanged()
     } else {
-      const local = getCalendarData()
-      if (Object.keys(local.dailyLog).length > 0 || Object.keys(local.plans).length > 0) {
-        pushCalendar(local.dailyLog, local.plans)
+      if (!getLocalStudyOwnerId()) markLocalStudyOwner()
+      const { autoMerged, applyRemote } = await syncOnLogin(studyStats, todos.value, getPomodoroSettings())
+      if (applyRemote) applyRemoteData(applyRemote)
+      if (autoMerged) triggerSyncToast()
+      const remoteCalendar = await fetchCalendar()
+      if (remoteCalendar) {
+        const local = getCalendarData()
+        const allDates = new Set([...Object.keys(remoteCalendar.dailyLog || {}), ...Object.keys(local.dailyLog || {})])
+        const mergedLog = {}
+        for (const date of allDates) {
+          const r = remoteCalendar.dailyLog?.[date] || { studyTime: 0, pomodoros: 0 }
+          const l = local.dailyLog?.[date] || { studyTime: 0, pomodoros: 0 }
+          mergedLog[date] = {
+            studyTime: Math.max(r.studyTime || 0, l.studyTime || 0),
+            pomodoros: Math.max(r.pomodoros || 0, l.pomodoros || 0),
+          }
+        }
+        const allPlanDates = new Set([...Object.keys(remoteCalendar.plans || {}), ...Object.keys(local.plans || {})])
+        const mergedPlans = {}
+        for (const date of allPlanDates) {
+          const rPlans = remoteCalendar.plans?.[date] || []
+          const lPlans = local.plans?.[date] || []
+          const seen = new Set()
+          mergedPlans[date] = []
+          for (const p of [...lPlans, ...rPlans]) {
+            if (!seen.has(p.id)) { seen.add(p.id); mergedPlans[date].push(p) }
+          }
+        }
+        setCalendarData({ dailyLog: mergedLog, plans: mergedPlans })
+        pushCalendar(mergedLog, mergedPlans)
+      } else {
+        const local = getCalendarData()
+        if (Object.keys(local.dailyLog).length > 0 || Object.keys(local.plans).length > 0) {
+          pushCalendar(local.dailyLog, local.plans)
+        }
       }
     }
   }

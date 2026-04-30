@@ -7,7 +7,13 @@ const syncStatus = ref('idle')
 const lastSyncTime = ref(null)
 
 export function useStudySync() {
-    const { token, isLoggedIn, getAuthHeaders, logout } = useStudyAuth()
+    const { isLoggedIn, getAuthHeaders, logout } = useStudyAuth()
+
+    const getNoStoreHeaders = () => ({
+        ...getAuthHeaders(),
+        'Cache-Control': 'no-store',
+        Pragma: 'no-cache',
+    })
 
 
     const fetchRemoteData = async () => {
@@ -15,7 +21,8 @@ export function useStudySync() {
 
         try {
             const res = await fetch(`${MIKUMOD_API}/api/study/data`, {
-                headers: getAuthHeaders(),
+                headers: getNoStoreHeaders(),
+                cache: 'no-store',
             })
 
             if (res.status === 401) {
@@ -41,7 +48,8 @@ export function useStudySync() {
             syncStatus.value = 'syncing'
             const res = await fetch(`${MIKUMOD_API}/api/study/data`, {
                 method: 'PUT',
-                headers: getAuthHeaders(),
+                headers: getNoStoreHeaders(),
+                cache: 'no-store',
                 body: JSON.stringify({ stats, todos, settings }),
             })
 
@@ -73,7 +81,8 @@ export function useStudySync() {
 
         try {
             const res = await fetch(`${MIKUMOD_API}/api/study/calendar`, {
-                headers: getAuthHeaders(),
+                headers: getNoStoreHeaders(),
+                cache: 'no-store',
             })
 
             if (res.status === 401) { logout(); return null }
@@ -93,7 +102,8 @@ export function useStudySync() {
         try {
             const res = await fetch(`${MIKUMOD_API}/api/study/calendar`, {
                 method: 'PUT',
-                headers: getAuthHeaders(),
+                headers: getNoStoreHeaders(),
+                cache: 'no-store',
                 body: JSON.stringify({ dailyLog, plans }),
             })
 
@@ -134,8 +144,9 @@ export function useStudySync() {
         }
 
         const remoteStats = remoteData.stats || {}
-        const localHasData = localStats.totalStudyTime > 0 || localStats.totalPomodoros > 0
-        const remoteHasData = remoteStats.totalStudyTime > 0 || remoteStats.totalPomodoros > 0
+        const remoteTodos = Array.isArray(remoteData.todos) ? remoteData.todos : []
+        const localHasData = localStats.totalStudyTime > 0 || localStats.totalPomodoros > 0 || (Array.isArray(localTodos) && localTodos.length > 0)
+        const remoteHasData = remoteStats.totalStudyTime > 0 || remoteStats.totalPomodoros > 0 || remoteTodos.length > 0
 
         if (!localHasData && !remoteHasData) {
             return { autoMerged: false }
@@ -153,6 +164,10 @@ export function useStudySync() {
         const statsMatch =
             localStats.totalStudyTime === remoteStats.totalStudyTime &&
             localStats.totalPomodoros === remoteStats.totalPomodoros
+
+        if (statsMatch && (!Array.isArray(localTodos) || localTodos.length === 0) && remoteTodos.length > 0) {
+            return { autoMerged: true, applyRemote: remoteData }
+        }
 
         if (statsMatch) {
             await pushData(localStats, localTodos, localSettings)

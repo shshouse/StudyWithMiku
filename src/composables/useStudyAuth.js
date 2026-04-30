@@ -2,9 +2,13 @@ import { ref, computed, onMounted } from 'vue'
 
 const STUDY_TOKEN_KEY = 'study_auth_token'
 const STUDY_USER_KEY = 'study_auth_user'
+const STUDY_USER_ID_KEY = 'study_auth_user_id'
+const STUDY_TOKEN_USER_CHANGED_KEY = 'study_auth_token_user_changed'
 
 const token = ref(localStorage.getItem(STUDY_TOKEN_KEY) || '')
 const username = ref(localStorage.getItem(STUDY_USER_KEY) || '')
+const userId = ref(getTokenUserId(token.value) || localStorage.getItem(STUDY_USER_ID_KEY) || '')
+const tokenUserChanged = ref(sessionStorage.getItem(STUDY_TOKEN_USER_CHANGED_KEY) === '1')
 const isLoggedIn = computed(() => !!token.value)
 
  function decodeBase64UrlJson(base64Url) {
@@ -20,9 +24,9 @@ const isLoggedIn = computed(() => !!token.value)
      return JSON.parse(new TextDecoder().decode(bytes))
  }
 
- function getTokenPayload(studyToken) {
+export function getTokenPayload(studyToken) {
      try {
-         const payloadB64 = studyToken.split('.')[1]
+         const payloadB64 = studyToken?.split('.')[1]
          if (!payloadB64) return null
          return decodeBase64UrlJson(payloadB64)
      } catch {
@@ -30,10 +34,20 @@ const isLoggedIn = computed(() => !!token.value)
      }
  }
 
+export function getTokenUserId(studyToken) {
+    const payload = getTokenPayload(studyToken)
+    return typeof payload?.sub === 'string' ? payload.sub : ''
+}
+
  function syncUsernameFromToken(studyToken) {
      const payload = getTokenPayload(studyToken)
      if (!payload) return
 
+     const nextUserId = getTokenUserId(studyToken)
+     if (nextUserId) {
+         userId.value = nextUserId
+         localStorage.setItem(STUDY_USER_ID_KEY, nextUserId)
+     }
      if (payload.username || payload.sub) {
          username.value = payload.username || payload.sub.slice(0, 8)
          localStorage.setItem(STUDY_USER_KEY, username.value)
@@ -56,16 +70,29 @@ export function useStudyAuth() {
         const hash = window.location.hash
         if (!hash.includes('study_token=')) return false
 
-        const match = hash.match(/study_token=([^&]+)/)
-        if (match && match[1]) {
-            token.value = match[1]
-            localStorage.setItem(STUDY_TOKEN_KEY, match[1])
+        const params = new URLSearchParams(hash.slice(1))
+        const callbackToken = params.get('study_token') || ''
+        if (callbackToken) {
+            const previousUserId = getTokenUserId(token.value) || localStorage.getItem(STUDY_USER_ID_KEY) || ''
+            const nextUserId = getTokenUserId(callbackToken)
+            const changed = !!previousUserId && !!nextUserId && previousUserId !== nextUserId
+
+            token.value = callbackToken
+            tokenUserChanged.value = changed
+            localStorage.setItem(STUDY_TOKEN_KEY, callbackToken)
+            if (changed) {
+                sessionStorage.setItem(STUDY_TOKEN_USER_CHANGED_KEY, '1')
+            } else {
+                sessionStorage.removeItem(STUDY_TOKEN_USER_CHANGED_KEY)
+            }
 
 
-            syncUsernameFromToken(match[1])
+            syncUsernameFromToken(callbackToken)
 
 
-            history.replaceState(null, '', window.location.pathname + window.location.search)
+            params.delete('study_token')
+            const nextHash = params.toString()
+            history.replaceState(null, '', window.location.pathname + window.location.search + (nextHash ? `#${nextHash}` : ''))
             return true
         }
         return false
@@ -75,8 +102,17 @@ export function useStudyAuth() {
     const logout = () => {
         token.value = ''
         username.value = ''
+        userId.value = ''
+        tokenUserChanged.value = false
         localStorage.removeItem(STUDY_TOKEN_KEY)
         localStorage.removeItem(STUDY_USER_KEY)
+        localStorage.removeItem(STUDY_USER_ID_KEY)
+        sessionStorage.removeItem(STUDY_TOKEN_USER_CHANGED_KEY)
+    }
+
+    const clearTokenUserChanged = () => {
+        tokenUserChanged.value = false
+        sessionStorage.removeItem(STUDY_TOKEN_USER_CHANGED_KEY)
     }
 
 
@@ -108,9 +144,12 @@ export function useStudyAuth() {
     return {
         token,
         username,
+        userId,
+        tokenUserChanged,
         isLoggedIn,
         login,
         logout,
+        clearTokenUserChanged,
         getAuthHeaders,
         isTokenExpired,
         MIKUMOD_URL,
