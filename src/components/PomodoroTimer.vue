@@ -59,6 +59,7 @@
               <button class="nav-item" :class="{ active: currentTab === 'todos' }" @click="currentTab = 'todos'">待办列表</button>
               <button class="nav-item" :class="{ active: currentTab === 'playlist' }" @click="openPlaylistTab">歌单<span v-if="hasNewPlaylist" class="update-dot"></span></button>
               <button class="nav-item" :class="{ active: currentTab === 'sync' }" @click="currentTab = 'sync'">云同步</button>
+              <button class="nav-item" :class="{ active: currentTab === 'chat' }" @click="currentTab = 'chat'">自习室</button>
               <button class="nav-item" :class="{ active: currentTab === 'updates' }" @click="openUpdatesTab">更新日志<span v-if="hasNewUpdate" class="update-dot"></span></button>
               <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="openAboutTab">关于<span v-if="!qqGroupSeen" class="update-dot"></span></button>
             </div>
@@ -239,6 +240,41 @@
                 </div>
               </div>
 
+              <div v-else-if="currentTab === 'chat'" key="chat" class="chat-container">
+                <div class="chat-header">
+                  <div>
+                    <div class="chat-title">StudyWithMiku</div>
+                    <div class="chat-subtitle">和正在学习的人打个招呼吧</div>
+                  </div>
+                  <div class="chat-presence" :class="{ connected: isConnected }">
+                    <span class="chat-presence-dot"></span>
+                    <span>{{ isConnected ? `${onlineCount} 在线` : '连接中' }}</span>
+                  </div>
+                </div>
+                <div ref="chatMessagesRef" class="chat-messages">
+                  <div v-if="messages.length === 0" class="chat-empty">暂无消息，开始第一句聊天吧</div>
+                  <div v-for="message in messages" :key="message.id" class="chat-message" :class="{ own: message.userId && message.userId === getCurrentStudyUserId() }">
+                    <div class="chat-message-meta">
+                      <span class="chat-message-name">{{ message.username || '游客' }}</span>
+                      <span class="chat-message-time">{{ formatChatTime(message.createdAt) }}</span>
+                    </div>
+                    <div class="chat-message-content">{{ message.content }}</div>
+                  </div>
+                </div>
+                <div v-if="chatError" class="chat-error">{{ chatError }}</div>
+                <form class="chat-form" @submit.prevent="submitChatMessage">
+                  <input v-model="chatInput" class="chat-input" type="text" maxlength="500" :placeholder="isLoggedIn ? '输入消息...' : '登录后可以发言'" :disabled="!isConnected || !isLoggedIn || !isAuthenticated"/>
+                  <button class="action-btn chat-send-btn" type="submit" :disabled="!isConnected || !isLoggedIn || !isAuthenticated || !chatInput.trim()">发送</button>
+                </form>
+                <div v-if="!isLoggedIn" class="chat-login-tip">
+                  <span>登录 MikuMod 账号后可以参与聊天</span>
+                  <button class="action-btn login-btn" @click="login">登录</button>
+                </div>
+                <div v-else-if="!isAuthenticated" class="chat-login-tip">
+                  <span>正在验证聊天身份...</span>
+                </div>
+              </div>
+
               <div v-else-if="currentTab === 'updates'">
                 <Updates />
               </div>
@@ -292,7 +328,11 @@
 </transition>
 <transition name="fade">
   <div v-if="showSyncToast" class="sync-toast">
-    <div class="sync-toast-icon"></div>
+    <div class="sync-toast-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </div>
     <div class="sync-toast-body">
       <div class="sync-toast-title">学习数据自动同步完成</div>
       <div class="sync-toast-subtitle">欢迎回来！Miku 等你许久了 &gt;﹏&lt;</div>
@@ -303,7 +343,7 @@
 </template>
 
 <script setup>
-  import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
+  import { ref, computed, onMounted, onUnmounted, watch, reactive, nextTick } from 'vue'
   import { useOnlineCount } from '../composables/useOnlineCount.js'
   import { useMusic } from '../composables/useMusic.js'
   import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
@@ -360,13 +400,15 @@ const props = defineProps({
 })
 
 const { token, username, userId, tokenUserChanged, isLoggedIn, login, logout, clearTokenUserChanged, isTokenExpired } = useStudyAuth()
-const { onlineCount, adminOnline, isConnected } = useOnlineCount(import.meta.env.VITE_WS_URL, { username })
+const { onlineCount, adminOnline, isConnected, isAuthenticated, messages, chatError, sendChatMessage } = useOnlineCount(import.meta.env.VITE_WS_URL, { username, token })
 const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS } = useMusic()
 const { syncStatus, lastSyncTime, fetchRemoteData, syncOnLogin, pushCalendar, fetchCalendar, pushAll } = useStudySync()
 const { crossfadeEnabled, toggleCrossfade, fadeMusicOut, fadeMusicIn } = useCrossfade()
 const { recordStudyTime: calendarRecordStudy, recordPomodoro: calendarRecordPomodoro, getCalendarData, setCalendarData } = useCalendar()
 
 const showSyncToast = ref(false)
+const chatInput = ref('')
+const chatMessagesRef = ref(null)
 let syncToastTimer = null
 const triggerSyncToast = () => {
   showSyncToast.value = true
@@ -384,6 +426,23 @@ const syncStatusText = computed(() => {
   }
   return '未同步'
 })
+const formatChatTime = (value) => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+}
+const scrollChatToBottom = async () => {
+  await nextTick()
+  if (chatMessagesRef.value) chatMessagesRef.value.scrollTop = chatMessagesRef.value.scrollHeight
+}
+const submitChatMessage = () => {
+  const content = chatInput.value.trim()
+  if (!content) return
+  if (sendChatMessage(content)) {
+    chatInput.value = ''
+    scrollChatToBottom()
+  }
+}
 
 let pushTimeout = null
 const triggerSync = () => {
@@ -432,7 +491,9 @@ const selectedPlatform = ref(platform.value)
 const currentTab = ref('pomodoro')
 const currentHitokoto = ref({ text: '', source: '' })
 const showHitokotoAnimation = ref(false)
-const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', calendar: '学习数据', todos: '待办列表', playlist: '歌单设置', sync: '同步', updates: '更新日志', about: '关于' }[currentTab.value]))
+const currentTabTitle = computed(() => ({ pomodoro: '番茄钟设置', calendar: '学习数据', todos: '待办列表', playlist: '歌单设置', sync: '同步', chat: '自习室', updates: '更新日志', about: '关于' }[currentTab.value]))
+watch(currentTab, (tab) => { if (tab === 'chat') scrollChatToBottom() })
+watch(messages, () => { if (currentTab.value === 'chat') scrollChatToBottom() }, { deep: true })
 
 const STUDY_DATA_OWNER_KEY = 'study_data_owner_id'
 const getCurrentStudyUserId = () => userId.value || getTokenUserId(token.value)
@@ -803,7 +864,6 @@ const onUITouchStart = () => { setHoveringUI(true) }
 const onUITouchEnd = () => { setHoveringUI(false) }
 
 onMounted(async () => {
-  if (import.meta.env.DEV) triggerSyncToast()
   if (isLoggedIn.value && !isTokenExpired()) {
     if (isLocalStudyOwnerMismatch()) {
       backupLocalStudyData()
@@ -1294,12 +1354,47 @@ const handleVisibilityChange = () => {
 .feature-item { font-size: 0.85rem; color: rgba(255, 255, 255, 0.9); display: flex; align-items: center; gap: 0.4rem; }
 .check-icon { color: #4ecdc4; font-weight: bold; }
 
+.chat-container { color: white; display: flex; flex-direction: column; gap: 0.8rem; min-height: 420px; }
+.chat-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; }
+.chat-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem; }
+.chat-subtitle { font-size: 0.78rem; color: rgba(255, 255, 255, 0.6); }
+.chat-presence { display: inline-flex; align-items: center; gap: 0.4rem; flex-shrink: 0; padding: 0.35rem 0.65rem; border-radius: 999px; font-size: 0.75rem; color: rgba(255, 255, 255, 0.75); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); }
+.chat-presence.connected { color: rgba(144, 238, 144, 0.95); border-color: rgba(76, 175, 80, 0.35); background: rgba(76, 175, 80, 0.12); }
+.chat-presence-dot { width: 7px; height: 7px; border-radius: 50%; background: #777; }
+.chat-presence.connected .chat-presence-dot { background: #4caf50; box-shadow: 0 0 8px rgba(76, 175, 80, 0.6); }
+.chat-messages { flex: 1; min-height: 230px; max-height: 42vh; overflow-y: auto; padding: 0.8rem; display: flex; flex-direction: column; gap: 0.7rem; background: rgba(0, 0, 0, 0.18); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; }
+.chat-messages::-webkit-scrollbar { width: 6px; }
+.chat-messages::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 3px; }
+.chat-messages::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+.chat-empty { margin: auto; text-align: center; font-size: 0.85rem; color: rgba(255, 255, 255, 0.45); }
+.chat-message { align-self: flex-start; max-width: 84%; padding: 0.65rem 0.75rem; border-radius: 12px; background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.1); }
+.chat-message.own { align-self: flex-end; background: rgba(57, 197, 187, 0.18); border-color: rgba(57, 197, 187, 0.3); }
+.chat-message-meta { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; font-size: 0.72rem; color: rgba(255, 255, 255, 0.5); }
+.chat-message-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(255, 255, 255, 0.78); }
+.chat-message-time { flex-shrink: 0; }
+.chat-message-content { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; line-height: 1.5; font-size: 0.9rem; }
+.chat-error { padding: 0.55rem 0.7rem; border-radius: 8px; font-size: 0.78rem; color: rgba(255, 210, 210, 0.95); background: rgba(244, 67, 54, 0.16); border: 1px solid rgba(244, 67, 54, 0.28); }
+.chat-form { display: flex; gap: 0.6rem; align-items: center; }
+.chat-input { flex: 1; min-width: 0; padding: 0.65rem 0.85rem; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: white; font-size: 0.9rem; transition: all 0.3s ease; }
+.chat-input:focus { outline: none; border-color: rgba(57, 197, 187, 0.55); background: rgba(255, 255, 255, 0.12); box-shadow: 0 0 0 3px rgba(57, 197, 187, 0.08); }
+.chat-input::placeholder { color: rgba(255, 255, 255, 0.4); }
+.chat-input:disabled { opacity: 0.55; cursor: not-allowed; }
+.chat-send-btn { flex-shrink: 0; padding: 0.65rem 1rem; background: rgba(57, 197, 187, 0.3); border-color: rgba(57, 197, 187, 0.5); }
+.chat-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.chat-login-tip { display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; padding: 0.75rem 0.9rem; border-radius: 10px; font-size: 0.8rem; color: rgba(255, 255, 255, 0.7); background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); }
+
 .reset-stats-btn { margin-top: 1rem; width: 100%; background: rgba(244, 67, 54, 0.3); border-color: rgba(244, 67, 54, 0.5); }
 
 @media (max-width: 768px) {
   .stat-item { padding: 0.8rem; }
   .stat-label { font-size: 0.85rem; }
   .stat-value { font-size: 1rem; }
+  .chat-container { min-height: 360px; }
+  .chat-header { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+  .chat-messages { min-height: 220px; max-height: 38vh; }
+  .chat-form { flex-direction: column; align-items: stretch; }
+  .chat-send-btn { width: 100%; }
+  .chat-login-tip { flex-direction: column; align-items: stretch; }
 }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }

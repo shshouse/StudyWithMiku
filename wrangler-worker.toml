@@ -2,9 +2,18 @@ name = "study-with-miku-onlinecounter"
 main = "workers/online-counter.js"
 compatibility_date = "2023-10-01"
 
+[vars]
+STUDY_JWT_MIN_IAT = "0"
+
 [[durable_objects.bindings]]
 name = "ONLINE_COUNTER"
 class_name = "OnlineCounter"
+
+[[d1_databases]]
+binding = "CHAT_DB"
+database_name = "study-with-miku"
+database_id = "c2e32366-d845-40a9-a158-9d0f8456b149"
+migrations_dir = "workers/migrations"
 
 [[migrations]]
 tag = "v1"

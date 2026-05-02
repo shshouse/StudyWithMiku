@@ -8,7 +8,10 @@
     "build": "vite build && npm run copy-assets",
     "preview": "vite preview",
     "copy-assets": "copyfiles -u 1 public/**/* dist/",
-    "deploy:worker": "wrangler deploy --config wrangler-worker.toml"
+    "deploy:worker": "wrangler deploy --config wrangler-worker.toml",
+    "d1:create": "wrangler d1 create study-with-miku",
+    "d1:migrate:local": "wrangler d1 migrations apply study-with-miku --local --config wrangler-worker.toml",
+    "d1:migrate:remote": "wrangler d1 migrations apply study-with-miku --remote --config wrangler-worker.toml"
   },
   "dependencies": {
     "@vueuse/core": "^10.1.2",
