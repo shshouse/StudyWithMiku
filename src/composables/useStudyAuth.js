@@ -9,6 +9,7 @@ const token = ref(localStorage.getItem(STUDY_TOKEN_KEY) || '')
 const username = ref(localStorage.getItem(STUDY_USER_KEY) || '')
 const userId = ref(getTokenUserId(token.value) || localStorage.getItem(STUDY_USER_ID_KEY) || '')
 const tokenUserChanged = ref(sessionStorage.getItem(STUDY_TOKEN_USER_CHANGED_KEY) === '1')
+const sessionExpired = ref(false)
 const isLoggedIn = computed(() => !!token.value)
 
  function decodeBase64UrlJson(base64Url) {
@@ -61,8 +62,18 @@ export function useStudyAuth() {
 
 
     const login = () => {
+        sessionExpired.value = false
         const callbackUrl = encodeURIComponent(STUDY_URL)
         window.location.href = `${MIKUMOD_URL}/login?redirect=study&callback=${callbackUrl}`
+    }
+
+    const markSessionExpired = () => {
+        if (!token.value) return
+        sessionExpired.value = true
+    }
+
+    const clearSessionExpired = () => {
+        sessionExpired.value = false
     }
 
 
@@ -104,6 +115,7 @@ export function useStudyAuth() {
         username.value = ''
         userId.value = ''
         tokenUserChanged.value = false
+        sessionExpired.value = false
         localStorage.removeItem(STUDY_TOKEN_KEY)
         localStorage.removeItem(STUDY_USER_KEY)
         localStorage.removeItem(STUDY_USER_ID_KEY)
@@ -130,10 +142,13 @@ export function useStudyAuth() {
     }
 
     onMounted(() => {
-        handleCallback()
+        const callbackHandled = handleCallback()
+        if (callbackHandled) {
+            sessionExpired.value = false
+        }
 
         if (token.value && isTokenExpired()) {
-            logout()
+            sessionExpired.value = true
             return
         }
         if (token.value) {
@@ -146,10 +161,13 @@ export function useStudyAuth() {
         username,
         userId,
         tokenUserChanged,
+        sessionExpired,
         isLoggedIn,
         login,
         logout,
         clearTokenUserChanged,
+        markSessionExpired,
+        clearSessionExpired,
         getAuthHeaders,
         isTokenExpired,
         MIKUMOD_URL,

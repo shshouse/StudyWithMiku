@@ -7,7 +7,7 @@ const syncStatus = ref('idle')
 const lastSyncTime = ref(null)
 
 export function useStudySync() {
-    const { isLoggedIn, getAuthHeaders, logout } = useStudyAuth()
+    const { isLoggedIn, getAuthHeaders, markSessionExpired } = useStudyAuth()
 
     const getNoStoreHeaders = () => ({
         ...getAuthHeaders(),
@@ -26,7 +26,7 @@ export function useStudySync() {
             })
 
             if (res.status === 401) {
-                logout()
+                markSessionExpired()
                 return null
             }
 
@@ -54,7 +54,7 @@ export function useStudySync() {
             })
 
             if (res.status === 401) {
-                logout()
+                markSessionExpired()
                 syncStatus.value = 'error'
                 return false
             }
@@ -85,7 +85,7 @@ export function useStudySync() {
                 cache: 'no-store',
             })
 
-            if (res.status === 401) { logout(); return null }
+            if (res.status === 401) { markSessionExpired(); return null }
             if (!res.ok) return null
 
             const result = await res.json()
@@ -107,7 +107,7 @@ export function useStudySync() {
                 body: JSON.stringify({ dailyLog, plans }),
             })
 
-            if (res.status === 401) { logout(); return false }
+            if (res.status === 401) { markSessionExpired(); return false }
             if (!res.ok) return false
             return true
         } catch (error) {
