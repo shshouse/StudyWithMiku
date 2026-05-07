@@ -1,7 +1,7 @@
 export const recommendPlaylists = [
   {
     id: '1',
-    name: '站长神秘歌单+7首神秘音乐',
+    name: '站长神秘歌单+8首神秘音乐',
     desc: '?',
     platform: 'netease',
     playlistId: '8894040639',
@@ -9,19 +9,19 @@ export const recommendPlaylists = [
   },
   {
     id: '2',
-    name: '【学习向】Galgame纯音乐 by-千禧2k-',
+    name: '【学习向】Galgame纯音乐',
     desc: '静听一首gal曲子，品剧中故事。',
     platform: 'netease',
     playlistId: '5010242104',
-    tags: ['Gal','治愈']
+    tags: ['Gal','治愈','by-千禧2k-']
   },
   {
     id: '3',
-    name: '炤华夕逝的"学习（真）"歌单',
+    name: '学习（真）歌单',
     desc: '好耶ヾ(✿ﾟ▽ﾟ)ノ',
     platform: 'netease',
     playlistId: '12782951325',
-    tags: [ '轻音乐','平静']
+    tags: [ '轻音乐','平静','by 炤华夕逝']
   },
   {
     id: '4',
@@ -41,6 +41,14 @@ export const recommendPlaylists = [
   },
   {
     id: '6',
+    name: '东方 舒缓纯音',
+    desc: '世间桃园，唯幻想乡',
+    platform: 'netease',
+    playlistId: '2814652312',
+    tags: ['轻音乐','白噪音','By 永生']
+  },
+  {
+    id: '7',
     name: '白噪音歌单',
     desc: '自然白噪音背景，适合学习',
     platform: 'netease',
