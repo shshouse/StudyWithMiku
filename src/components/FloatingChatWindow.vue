@@ -54,6 +54,9 @@
         :send-message="sendMessage"
         :profiles="profiles"
         :show-popout="false"
+        :has-more="hasMore"
+        :is-loading-more="isLoadingMore"
+        :load-more="loadMore"
         title="聊天室"
         subtitle="和正在学习的人打个招呼吧"
         @login="$emit('login')"
@@ -88,6 +91,9 @@ defineProps({
   currentUserId: { type: String, default: '' },
   sendMessage: { type: Function, required: true },
   profiles: { type: Object, default: () => ({}) },
+  hasMore: { type: Boolean, default: false },
+  isLoadingMore: { type: Boolean, default: false },
+  loadMore: { type: Function, default: null },
 })
 
 defineEmits(['close', 'login', 'ui-enter', 'ui-leave'])

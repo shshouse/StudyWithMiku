@@ -2,15 +2,20 @@ const DEFAULT_ROOM_ID = 'global'
 const MAX_ROOM_ID_LENGTH = 64
 const MAX_USERNAME_LENGTH = 40
 const MAX_MESSAGE_LENGTH = 500
-const MAX_HISTORY_LIMIT = 50
+const MAX_AVATAR_URL_LENGTH = 1024
+const HISTORY_PAGE_SIZE = 50
+const HISTORY_PAGE_LIMIT = 100
 const CHAT_THROTTLE_MS = 1500
+const HISTORY_THROTTLE_MS = 400
 
 const getDefaultSessionMeta = () => ({
   roomId: DEFAULT_ROOM_ID,
   userId: '',
   username: '',
+  avatarUrl: '',
   authenticated: false,
   lastMessageAt: 0,
+  lastHistoryLoadAt: 0,
 })
 
 const normalizeRoomId = (value) => {
@@ -28,6 +33,24 @@ const getRoomIdFromUrl = (url) => normalizeRoomId(url.searchParams.get('roomId')
 const sanitizeUsername = (value) => String(value || '').trim().slice(0, MAX_USERNAME_LENGTH)
 
 const sanitizeContent = (value) => String(value || '').trim().slice(0, MAX_MESSAGE_LENGTH)
+
+const sanitizeAvatarUrl = (value) => {
+  const raw = String(value || '').trim().slice(0, MAX_AVATAR_URL_LENGTH)
+  if (!raw) return ''
+  if (!/^https?:\/\//i.test(raw)) return ''
+  return raw
+}
+
+const parsePositiveInt = (value, fallback) => {
+  const n = Number.parseInt(value, 10)
+  return Number.isFinite(n) && n > 0 ? n : fallback
+}
+
+const parseCursor = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const n = Number.parseInt(value, 10)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
 
 const jsonResponse = (data, init = {}) => {
   const headers = new Headers(init.headers || {})
@@ -101,6 +124,7 @@ const verifyStudyToken = async (token, env) => {
     return {
       userId: payload.sub,
       username: sanitizeUsername(payload.username || payload.sub.slice(0, 8)),
+      avatarUrl: sanitizeAvatarUrl(payload.avatar_url),
     }
   } catch {
     return null
@@ -179,8 +203,10 @@ export class OnlineCounter {
       roomId: normalizeRoomId(meta.roomId ?? current.roomId),
       userId: String(meta.userId ?? current.userId ?? '').slice(0, 128),
       username: sanitizeUsername(meta.username ?? current.username),
+      avatarUrl: sanitizeAvatarUrl(meta.avatarUrl ?? current.avatarUrl),
       authenticated: Boolean(meta.authenticated ?? current.authenticated),
       lastMessageAt: Number(meta.lastMessageAt ?? current.lastMessageAt) || 0,
+      lastHistoryLoadAt: Number(meta.lastHistoryLoadAt ?? current.lastHistoryLoadAt) || 0,
     })
   }
 
@@ -193,10 +219,17 @@ export class OnlineCounter {
     }
 
     if (url.pathname === '/history') {
+      const before = parseCursor(url.searchParams.get('before'))
+      const limit = Math.min(
+        parsePositiveInt(url.searchParams.get('limit'), HISTORY_PAGE_SIZE),
+        HISTORY_PAGE_LIMIT,
+      )
+      const { messages, hasMore } = await this.getMessagesPage(roomId, { before, limit })
       return jsonResponse({
         type: 'history',
         roomId,
-        messages: await this.getRecentMessages(roomId),
+        messages,
+        hasMore,
       })
     }
 
@@ -214,13 +247,16 @@ export class OnlineCounter {
       roomId,
       userId: auth?.userId || '',
       username: auth?.username || sanitizeUsername(url.searchParams.get('username')),
+      avatarUrl: auth?.avatarUrl || '',
       authenticated: Boolean(auth),
     })
 
+    const initial = await this.getMessagesPage(roomId, { before: null, limit: HISTORY_PAGE_SIZE })
     this.sendJson(server, {
       type: 'history',
       roomId,
-      messages: await this.getRecentMessages(roomId),
+      messages: initial.messages,
+      hasMore: initial.hasMore,
     })
     this.broadcastPresence(roomId)
 
@@ -250,6 +286,11 @@ export class OnlineCounter {
           this.setSessionMeta(ws, { username: data.username || '' })
           this.broadcastPresence(meta.roomId)
         }
+        return
+      }
+
+      if (data.type === 'load_history') {
+        await this.handleLoadHistory(ws, data)
         return
       }
 
@@ -283,6 +324,7 @@ export class OnlineCounter {
     this.setSessionMeta(ws, {
       userId: auth.userId,
       username: auth.username,
+      avatarUrl: auth.avatarUrl,
       authenticated: true,
     })
     this.sendJson(ws, {
@@ -290,8 +332,32 @@ export class OnlineCounter {
       ok: true,
       userId: auth.userId,
       username: auth.username,
+      avatar_url: auth.avatarUrl,
     })
     this.broadcastPresence(meta.roomId)
+  }
+
+  async handleLoadHistory(ws, data) {
+    const meta = this.getSessionMeta(ws)
+    const now = Date.now()
+    if (meta.lastHistoryLoadAt && now - meta.lastHistoryLoadAt < HISTORY_THROTTLE_MS) {
+      this.sendError(ws, 'rate_limited', '加载太频繁了')
+      return
+    }
+
+    const before = parseCursor(data.before)
+    const limit = Math.min(parsePositiveInt(data.limit, HISTORY_PAGE_SIZE), HISTORY_PAGE_LIMIT)
+
+    this.setSessionMeta(ws, { lastHistoryLoadAt: now })
+
+    const { messages, hasMore } = await this.getMessagesPage(meta.roomId, { before, limit })
+    this.sendJson(ws, {
+      type: 'history_chunk',
+      roomId: meta.roomId,
+      before,
+      messages,
+      hasMore,
+    })
   }
 
   async handleChatMessage(ws, data) {
@@ -320,11 +386,13 @@ export class OnlineCounter {
     }
 
     const username = meta.username || sanitizeUsername(data.username) || '游客'
+    const avatarUrl = meta.avatarUrl || ''
     const chatMessage = {
       id: crypto.randomUUID(),
       roomId: meta.roomId,
       userId: meta.authenticated ? meta.userId : '',
       username,
+      avatarUrl,
       content,
       createdAt: new Date(now).toISOString(),
     }
@@ -392,32 +460,52 @@ export class OnlineCounter {
     })
   }
 
-  async getRecentMessages(roomId) {
-    if (!this.env.CHAT_DB) return []
+  async getMessagesPage(roomId, { before = null, limit = HISTORY_PAGE_SIZE } = {}) {
+    if (!this.env.CHAT_DB) return { messages: [], hasMore: false }
+
+    const safeLimit = Math.min(Math.max(1, Math.floor(limit) || HISTORY_PAGE_SIZE), HISTORY_PAGE_LIMIT)
+    const fetchLimit = safeLimit + 1
 
     try {
-      const { results = [] } = await this.env.CHAT_DB
-        .prepare(`
-          SELECT id, room_id, user_id, username, content, created_at
-          FROM chat_messages
-          WHERE room_id = ?
-          ORDER BY created_at DESC
-          LIMIT ?
-        `)
-        .bind(roomId, MAX_HISTORY_LIMIT)
-        .all()
+      const stmt = before
+        ? this.env.CHAT_DB
+            .prepare(`
+              SELECT id, room_id, user_id, username, avatar_url, content, created_at
+              FROM chat_messages
+              WHERE room_id = ? AND created_at < ?
+              ORDER BY created_at DESC
+              LIMIT ?
+            `)
+            .bind(roomId, before, fetchLimit)
+        : this.env.CHAT_DB
+            .prepare(`
+              SELECT id, room_id, user_id, username, avatar_url, content, created_at
+              FROM chat_messages
+              WHERE room_id = ?
+              ORDER BY created_at DESC
+              LIMIT ?
+            `)
+            .bind(roomId, fetchLimit)
 
-      return results.reverse().map(row => ({
-        id: String(row.id),
-        roomId: String(row.room_id),
-        userId: String(row.user_id || ''),
-        username: String(row.username || ''),
-        content: String(row.content || ''),
-        createdAt: new Date(Number(row.created_at)).toISOString(),
-      }))
+      const { results = [] } = await stmt.all()
+      const hasMore = results.length > safeLimit
+      const trimmed = hasMore ? results.slice(0, safeLimit) : results
+
+      return {
+        messages: trimmed.reverse().map(row => ({
+          id: String(row.id),
+          roomId: String(row.room_id),
+          userId: String(row.user_id || ''),
+          username: String(row.username || ''),
+          avatarUrl: String(row.avatar_url || ''),
+          content: String(row.content || ''),
+          createdAt: new Date(Number(row.created_at)).toISOString(),
+        })),
+        hasMore,
+      }
     } catch (err) {
       console.error('D1 history error:', err)
-      return []
+      return { messages: [], hasMore: false }
     }
   }
 
@@ -435,10 +523,10 @@ export class OnlineCounter {
           .bind(message.roomId, message.roomId, createdAt, createdAt),
         this.env.CHAT_DB
           .prepare(`
-            INSERT INTO chat_messages (id, room_id, user_id, username, content, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO chat_messages (id, room_id, user_id, username, avatar_url, content, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
           `)
-          .bind(message.id, message.roomId, message.userId, message.username, message.content, createdAt),
+          .bind(message.id, message.roomId, message.userId, message.username, message.avatarUrl || '', message.content, createdAt),
       ])
     } catch (err) {
       console.error('D1 save error:', err)

@@ -1,6 +1,6 @@
 import { ref, onMounted, onUnmounted, watch, unref } from 'vue'
 
-const MAX_LOCAL_MESSAGES = 100
+const HISTORY_PAGE_SIZE = 50
 
 const normalizeChatMessage = (message) => {
   if (!message || typeof message !== 'object') return null
@@ -10,9 +10,32 @@ const normalizeChatMessage = (message) => {
     roomId: String(message.roomId || 'global'),
     userId: String(message.userId || ''),
     username: String(message.username || ''),
+    avatarUrl: typeof message.avatarUrl === 'string' ? message.avatarUrl : '',
     content: String(message.content || ''),
     createdAt: String(message.createdAt || new Date().toISOString()),
   }
+}
+
+const sortByCreatedAtAsc = (a, b) => {
+  const ta = new Date(a.createdAt).getTime()
+  const tb = new Date(b.createdAt).getTime()
+  if (ta !== tb) return ta - tb
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+}
+
+const dedupAndSort = (list) => {
+  const map = new Map()
+  for (const item of list) {
+    if (!item || !item.id) continue
+    map.set(item.id, item)
+  }
+  return Array.from(map.values()).sort(sortByCreatedAtAsc)
+}
+
+const getOldestCursor = (list) => {
+  if (!list.length) return null
+  const ts = new Date(list[0].createdAt).getTime()
+  return Number.isFinite(ts) && ts > 0 ? ts : null
 }
 
 export function useOnlineCount(wsUrl, options = {}) {
@@ -22,9 +45,12 @@ export function useOnlineCount(wsUrl, options = {}) {
   const isAuthenticated = ref(false)
   const messages = ref([])
   const chatError = ref('')
+  const hasMoreHistory = ref(false)
+  const isLoadingHistory = ref(false)
   let ws = null
   let reconnectTimer = null
   let pingTimer = null
+  let pendingLoadCursor = null
 
   const sendMessage = (payload) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -32,6 +58,19 @@ export function useOnlineCount(wsUrl, options = {}) {
       return true
     }
     return false
+  }
+
+  const loadMoreMessages = () => {
+    if (isLoadingHistory.value) return false
+    if (!hasMoreHistory.value) return false
+    const cursor = getOldestCursor(messages.value)
+    if (!cursor) return false
+    const ok = sendMessage({ type: 'load_history', before: cursor, limit: HISTORY_PAGE_SIZE })
+    if (ok) {
+      isLoadingHistory.value = true
+      pendingLoadCursor = cursor
+    }
+    return ok
   }
 
   const updateUsername = () => {
@@ -58,7 +97,7 @@ export function useOnlineCount(wsUrl, options = {}) {
       return
     }
 
-    messages.value = [...messages.value, normalized].slice(-MAX_LOCAL_MESSAGES)
+    messages.value = dedupAndSort([...messages.value, normalized])
   }
 
   const sendChatMessage = (content) => {
@@ -91,9 +130,23 @@ export function useOnlineCount(wsUrl, options = {}) {
             adminOnline.value = !!data.adminOnline
           }
           if (data.type === 'history') {
-            messages.value = Array.isArray(data.messages)
+            const incoming = Array.isArray(data.messages)
               ? data.messages.map(normalizeChatMessage).filter(Boolean)
               : []
+            messages.value = dedupAndSort(incoming)
+            hasMoreHistory.value = !!data.hasMore
+            isLoadingHistory.value = false
+            pendingLoadCursor = null
+          }
+          if (data.type === 'history_chunk') {
+            const incoming = Array.isArray(data.messages)
+              ? data.messages.map(normalizeChatMessage).filter(Boolean)
+              : []
+            // Prepend older messages, dedup against current list
+            messages.value = dedupAndSort([...incoming, ...messages.value])
+            hasMoreHistory.value = !!data.hasMore
+            isLoadingHistory.value = false
+            pendingLoadCursor = null
           }
           if (data.type === 'chat') {
             appendMessage(data.message)
@@ -104,6 +157,11 @@ export function useOnlineCount(wsUrl, options = {}) {
           }
           if (data.type === 'error') {
             chatError.value = data.message || '连接异常'
+            // Release the loading lock so the user can retry/scroll again
+            if (data.code === 'rate_limited' && pendingLoadCursor !== null) {
+              isLoadingHistory.value = false
+              pendingLoadCursor = null
+            }
           }
         } catch (err) {
           console.error('Parse message error:', err)
@@ -115,6 +173,8 @@ export function useOnlineCount(wsUrl, options = {}) {
         isAuthenticated.value = false
         onlineCount.value = 0
         adminOnline.value = false
+        isLoadingHistory.value = false
+        pendingLoadCursor = null
         console.log('WebSocket disconnected')
         stopPing()
         scheduleReconnect()
@@ -194,6 +254,9 @@ export function useOnlineCount(wsUrl, options = {}) {
     isAuthenticated,
     messages,
     chatError,
+    hasMoreHistory,
+    isLoadingHistory,
     sendChatMessage,
+    loadMoreMessages,
   }
 }

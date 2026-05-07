@@ -1,42 +1,44 @@
 <template>
   <div class="chat-container">
-    <div class="chat-header">
-      <div class="chat-heading">
-        <div class="chat-title">{{ title }}</div>
-        <div class="chat-subtitle">{{ subtitle }}</div>
-      </div>
-      <div class="chat-header-actions">
-        <div class="chat-presence" :class="{ connected: isConnected }">
-          <span class="chat-presence-dot"></span>
-          <span>{{ isConnected ? `${onlineCount} 在线` : '连接中' }}</span>
-        </div>
-        <button
-          v-if="showPopout"
-          type="button"
-          class="chat-popout-btn"
-          :title="popoutActive ? '已在独立窗口显示（点此收回）' : '独立窗口显示'"
-          :aria-label="popoutActive ? '收回聊天窗口' : '独立窗口显示'"
-          @click="$emit('popout')"
-        >
-          <svg v-if="!popoutActive" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M15 3h6v6"></path>
-            <path d="M10 14 21 3"></path>
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-          </svg>
-          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-            <polyline points="16 17 21 12 16 7"></polyline>
-            <line x1="21" y1="12" x2="9" y2="12"></line>
-          </svg>
-        </button>
-      </div>
-    </div>
+    <button
+      v-if="showPopout"
+      type="button"
+      class="chat-popout-floating-btn"
+      :title="popoutActive ? '已在独立窗口显示（点此收回）' : '独立窗口显示'"
+      :aria-label="popoutActive ? '收回聊天窗口' : '独立窗口显示'"
+      @click="$emit('popout')"
+    >
+      <svg v-if="!popoutActive" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M15 3h6v6"></path>
+        <path d="M10 14 21 3"></path>
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+      </svg>
+      <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <polyline points="16 17 21 12 16 7"></polyline>
+        <line x1="21" y1="12" x2="9" y2="12"></line>
+      </svg>
+    </button>
     <div class="chat-messages-wrapper">
       <div ref="chatMessagesRef" class="chat-messages" @scroll.passive="handleScroll">
+        <div v-if="hasMore" class="chat-history-status">
+          <button
+            v-if="!isLoadingMore"
+            type="button"
+            class="chat-load-more-btn"
+            @click="triggerLoadMore"
+          >加载更早的消息</button>
+          <span v-else class="chat-history-loading">
+            <span class="chat-history-spinner" aria-hidden="true"></span>
+            正在加载历史消息...
+          </span>
+        </div>
+        <div v-else-if="messages.length > 0" class="chat-history-status chat-history-end">已经到顶啦</div>
         <div v-if="messages.length === 0" class="chat-empty">暂无消息，开始第一句聊天吧</div>
         <div
           v-for="message in messages"
           :key="message.id"
+          :data-mid="message.id"
           class="chat-message"
           :class="{ own: message.userId && message.userId === currentUserId }"
         >
@@ -48,12 +50,12 @@
           >
             <img
               v-if="hasAvatarImage(message)"
-              :src="profiles[message.userId].avatar_url"
+              :src="getAvatarUrl(message)"
               :alt="resolveUsername(message) || '游客'"
               loading="lazy"
               decoding="async"
               referrerpolicy="no-referrer"
-              @error="onAvatarLoadError(message.userId)"
+              @error="onAvatarLoadError(getAvatarFailureKey(message))"
             />
             <span v-else>{{ getAvatarInitial(message) }}</span>
           </div>
@@ -124,6 +126,9 @@ const props = defineProps({
   profiles: { type: Object, default: () => ({}) },
   title: { type: String, default: 'StudyWithMiku' },
   subtitle: { type: String, default: '和正在学习的人打个招呼吧' },
+  hasMore: { type: Boolean, default: false },
+  isLoadingMore: { type: Boolean, default: false },
+  loadMore: { type: Function, default: null },
 })
 
 defineEmits(['login', 'popout'])
@@ -179,15 +184,34 @@ const getAvatarInitial = (message) => {
   return firstChar.toUpperCase()
 }
 
-const hasAvatarImage = (message) => {
-  if (!message.userId) return false
-  if (avatarLoadFailures.has(message.userId)) return false
-  const profile = props.profiles[message.userId]
-  return !!(profile && typeof profile.avatar_url === 'string' && profile.avatar_url.length > 0)
+const getAvatarFailureKey = (message) => {
+  // Distinguish per-message embedded avatar (frozen at send time) from
+  // the live profile avatar so a stale URL on one old message doesn't
+  // suppress a working avatar on a newer one or vice versa.
+  if (typeof message.avatarUrl === 'string' && message.avatarUrl) {
+    return `msg:${message.id || message.avatarUrl}`
+  }
+  return message.userId ? `user:${message.userId}` : ''
 }
 
-const onAvatarLoadError = (userId) => {
-  if (userId) avatarLoadFailures.add(userId)
+const getAvatarUrl = (message) => {
+  const embedded = typeof message.avatarUrl === 'string' ? message.avatarUrl : ''
+  if (embedded && !avatarLoadFailures.has(`msg:${message.id || embedded}`)) {
+    return embedded
+  }
+  if (message.userId && !avatarLoadFailures.has(`user:${message.userId}`)) {
+    const profile = props.profiles[message.userId]
+    if (profile && typeof profile.avatar_url === 'string' && profile.avatar_url) {
+      return profile.avatar_url
+    }
+  }
+  return ''
+}
+
+const hasAvatarImage = (message) => !!getAvatarUrl(message)
+
+const onAvatarLoadError = (failureKey) => {
+  if (failureKey) avatarLoadFailures.add(failureKey)
 }
 
 const isAtBottom = () => {
@@ -226,13 +250,38 @@ const saveScrollPosition = () => {
   } catch {}
 }
 
+const SCROLL_TOP_TRIGGER = 60
+
+const triggerLoadMore = () => {
+  if (typeof props.loadMore !== 'function') return
+  if (props.isLoadingMore || !props.hasMore) return
+  props.loadMore()
+}
+
+let previousScrollTop = Infinity
+
 const handleScroll = () => {
   if (!isReady.value) return
+  const el = chatMessagesRef.value
+  if (!el) return
+  const currentScrollTop = el.scrollTop
   const atBottom = isAtBottom()
   autoScrollPending.value = atBottom
   if (atBottom) unreadCount.value = 0
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer)
   scrollSaveTimer = setTimeout(saveScrollPosition, SCROLL_SAVE_DEBOUNCE)
+  // Auto-load older messages only when the user actively scrolls UP near the top.
+  // Comparing to previousScrollTop prevents spurious triggers from programmatic
+  // scrolls (e.g. initial scroll-to-bottom on a viewport taller than the content).
+  if (
+    currentScrollTop <= SCROLL_TOP_TRIGGER &&
+    currentScrollTop < previousScrollTop &&
+    props.hasMore &&
+    !props.isLoadingMore
+  ) {
+    triggerLoadMore()
+  }
+  previousScrollTop = currentScrollTop
 }
 
 const restoreScrollPosition = async () => {
@@ -283,20 +332,56 @@ onUnmounted(() => {
   saveScrollPosition()
 })
 
+// Track the oldest message identity so we can detect "older messages were
+// prepended" (history paging) vs "newer messages appended" (live chat).
+const getOldestMessageId = () => (props.messages.length ? props.messages[0].id : '')
+let lastOldestId = getOldestMessageId()
+let scrollAnchor = null // { topId, offsetWithinElement } captured before DOM update
+
 watch(
-  () => props.messages.length,
-  (newLen, oldLen = 0) => {
-    if (!isReady.value) return
+  () => props.messages,
+  (newList, oldList = []) => {
+    const newLen = newList.length
+    const oldLen = oldList.length
+    const newOldestId = newLen ? newList[0].id : ''
+    const olderPrepended = !!lastOldestId && newOldestId && newOldestId !== lastOldestId
+      && newList.some(m => m.id === lastOldestId) && newLen > oldLen
+
+    if (!isReady.value) {
+      lastOldestId = newOldestId
+      return
+    }
+
+    if (olderPrepended) {
+      // Capture the previous top message's element offset before DOM rerenders
+      const el = chatMessagesRef.value
+      if (el) {
+        const anchorEl = el.querySelector(`[data-mid="${CSS.escape(lastOldestId)}"]`)
+        scrollAnchor = anchorEl
+          ? { id: lastOldestId, prevOffset: anchorEl.offsetTop, prevScrollTop: el.scrollTop }
+          : null
+      }
+    }
+
     nextTick().then(() => {
-      if (autoScrollPending.value) {
-        const el = chatMessagesRef.value
+      const el = chatMessagesRef.value
+      if (olderPrepended && el && scrollAnchor) {
+        const anchorEl = el.querySelector(`[data-mid="${CSS.escape(scrollAnchor.id)}"]`)
+        if (anchorEl) {
+          const delta = anchorEl.offsetTop - scrollAnchor.prevOffset
+          el.scrollTop = scrollAnchor.prevScrollTop + delta
+        }
+        scrollAnchor = null
+      } else if (autoScrollPending.value) {
         if (el) el.scrollTop = el.scrollHeight
         unreadCount.value = 0
-      } else if (newLen > oldLen) {
+      } else if (newLen > oldLen && !olderPrepended) {
         unreadCount.value += newLen - oldLen
       }
+      lastOldestId = newOldestId
     })
-  }
+  },
+  { deep: false }
 )
 
 defineExpose({ scrollChatToBottom, jumpToBottom })
@@ -310,6 +395,35 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   gap: 0.8rem;
   min-height: 420px;
   height: 100%;
+  position: relative;
+}
+.chat-popout-floating-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.chat-popout-floating-btn:hover {
+  opacity: 1;
+  background: rgba(57, 197, 187, 0.2);
+  border-color: rgba(57, 197, 187, 0.45);
+  color: white;
+}
+.chat-popout-floating-btn:focus-visible {
+  outline: 2px solid rgba(57, 197, 187, 0.6);
+  outline-offset: 2px;
 }
 .chat-header {
   display: flex;
@@ -392,6 +506,46 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
 .chat-messages::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 3px; }
 .chat-messages::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
 .chat-empty { margin: auto; text-align: center; font-size: 0.85rem; color: rgba(255, 255, 255, 0.45); }
+.chat-history-status {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.35rem 0;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+.chat-history-end { color: rgba(255, 255, 255, 0.35); }
+.chat-history-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+.chat-history-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: rgba(57, 197, 187, 0.85);
+  animation: chat-spin 0.8s linear infinite;
+}
+@keyframes chat-spin {
+  to { transform: rotate(360deg); }
+}
+.chat-load-more-btn {
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.chat-load-more-btn:hover {
+  background: rgba(57, 197, 187, 0.2);
+  border-color: rgba(57, 197, 187, 0.4);
+}
 .chat-message {
   display: flex;
   gap: 0.55rem;
