@@ -1,4 +1,4 @@
-import { reactive, unref } from 'vue'
+import { reactive } from 'vue'
 
 const CACHE_STORAGE_KEY = 'study_user_profiles_cache'
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000
@@ -59,14 +59,13 @@ const isFresh = (id) => {
   return typeof expiresAt === 'number' && expiresAt > Date.now()
 }
 
-const fetchBatch = async (ids, token) => {
-  if (!ids.length || !token) return
+const fetchBatch = async (ids) => {
+  if (!ids.length) return
   try {
-    const url = `${MIKUMOD_URL}/api/study/profiles?ids=${ids.map(encodeURIComponent).join(',')}`
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: 'omit',
-    })
+    // ids 先排序让不同调用者的相同集合命中同一条 CDN 边缘缓存
+    const sortedIds = [...ids].sort()
+    const url = `${MIKUMOD_URL}/api/study/profiles?ids=${sortedIds.map(encodeURIComponent).join(',')}`
+    const res = await fetch(url, { credentials: 'omit' })
     if (!res.ok) {
       for (const id of ids) setProfile(id, null, NEGATIVE_TTL_MS)
       persistToStorage()
@@ -92,24 +91,22 @@ const fetchBatch = async (ids, token) => {
   }
 }
 
-const scheduleFlush = (token) => {
+const scheduleFlush = () => {
   if (flushTimer) return
   flushTimer = setTimeout(() => {
     flushTimer = null
     if (!pendingIds.size) return
-    const tokenValue = typeof token === 'function' ? token() : unref(token)
-    if (!tokenValue) return
     const ids = Array.from(pendingIds).slice(0, BATCH_LIMIT)
     for (const id of ids) {
       pendingIds.delete(id)
       inflightIds.add(id)
     }
-    fetchBatch(ids, tokenValue)
-    if (pendingIds.size > 0) scheduleFlush(token)
+    fetchBatch(ids)
+    if (pendingIds.size > 0) scheduleFlush()
   }, BATCH_FLUSH_DELAY_MS)
 }
 
-export function useUserProfiles(token) {
+export function useUserProfiles() {
   loadFromStorage()
 
   const ensureProfiles = (userIds) => {
@@ -124,7 +121,7 @@ export function useUserProfiles(token) {
       pendingIds.add(id)
       added = true
     }
-    if (added) scheduleFlush(token)
+    if (added) scheduleFlush()
   }
 
   return { profiles, ensureProfiles }

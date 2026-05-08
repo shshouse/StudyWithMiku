@@ -10,7 +10,6 @@ const normalizeChatMessage = (message) => {
     roomId: String(message.roomId || 'global'),
     userId: String(message.userId || ''),
     username: String(message.username || ''),
-    avatarUrl: typeof message.avatarUrl === 'string' ? message.avatarUrl : '',
     content: String(message.content || ''),
     createdAt: String(message.createdAt || new Date().toISOString()),
   }

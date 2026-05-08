@@ -185,25 +185,14 @@ const getAvatarInitial = (message) => {
 }
 
 const getAvatarFailureKey = (message) => {
-  // Distinguish per-message embedded avatar (frozen at send time) from
-  // the live profile avatar so a stale URL on one old message doesn't
-  // suppress a working avatar on a newer one or vice versa.
-  if (typeof message.avatarUrl === 'string' && message.avatarUrl) {
-    return `msg:${message.id || message.avatarUrl}`
-  }
   return message.userId ? `user:${message.userId}` : ''
 }
 
 const getAvatarUrl = (message) => {
-  const embedded = typeof message.avatarUrl === 'string' ? message.avatarUrl : ''
-  if (embedded && !avatarLoadFailures.has(`msg:${message.id || embedded}`)) {
-    return embedded
-  }
-  if (message.userId && !avatarLoadFailures.has(`user:${message.userId}`)) {
-    const profile = props.profiles[message.userId]
-    if (profile && typeof profile.avatar_url === 'string' && profile.avatar_url) {
-      return profile.avatar_url
-    }
+  if (!message.userId || avatarLoadFailures.has(`user:${message.userId}`)) return ''
+  const profile = props.profiles[message.userId]
+  if (profile && typeof profile.avatar_url === 'string' && profile.avatar_url) {
+    return profile.avatar_url
   }
   return ''
 }
@@ -270,9 +259,6 @@ const handleScroll = () => {
   if (atBottom) unreadCount.value = 0
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer)
   scrollSaveTimer = setTimeout(saveScrollPosition, SCROLL_SAVE_DEBOUNCE)
-  // Auto-load older messages only when the user actively scrolls UP near the top.
-  // Comparing to previousScrollTop prevents spurious triggers from programmatic
-  // scrolls (e.g. initial scroll-to-bottom on a viewport taller than the content).
   if (
     currentScrollTop <= SCROLL_TOP_TRIGGER &&
     currentScrollTop < previousScrollTop &&
@@ -332,11 +318,9 @@ onUnmounted(() => {
   saveScrollPosition()
 })
 
-// Track the oldest message identity so we can detect "older messages were
-// prepended" (history paging) vs "newer messages appended" (live chat).
 const getOldestMessageId = () => (props.messages.length ? props.messages[0].id : '')
 let lastOldestId = getOldestMessageId()
-let scrollAnchor = null // { topId, offsetWithinElement } captured before DOM update
+let scrollAnchor = null
 
 watch(
   () => props.messages,
@@ -353,7 +337,6 @@ watch(
     }
 
     if (olderPrepended) {
-      // Capture the previous top message's element offset before DOM rerenders
       const el = chatMessagesRef.value
       if (el) {
         const anchorEl = el.querySelector(`[data-mid="${CSS.escape(lastOldestId)}"]`)

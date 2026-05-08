@@ -442,7 +442,7 @@ const props = defineProps({
 
 const { token, username, userId, tokenUserChanged, sessionExpired, isLoggedIn, login, logout, clearTokenUserChanged, clearSessionExpired, isTokenExpired } = useStudyAuth()
 const { onlineCount, adminOnline, isConnected, isAuthenticated, messages, chatError, hasMoreHistory, isLoadingHistory, sendChatMessage, loadMoreMessages } = useOnlineCount(import.meta.env.VITE_WS_URL, { username, token })
-const { profiles: userProfiles, ensureProfiles } = useUserProfiles(token)
+const { profiles: userProfiles, ensureProfiles } = useUserProfiles()
 const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS } = useMusic()
 const { syncStatus, lastSyncTime, fetchRemoteData, syncOnLogin, pushCalendar, fetchCalendar, pushAll } = useStudySync()
 const { crossfadeEnabled, toggleCrossfade, fadeMusicOut, fadeMusicIn } = useCrossfade()
