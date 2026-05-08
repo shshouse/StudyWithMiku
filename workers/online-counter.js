@@ -2,7 +2,6 @@ const DEFAULT_ROOM_ID = 'global'
 const MAX_ROOM_ID_LENGTH = 64
 const MAX_USERNAME_LENGTH = 40
 const MAX_MESSAGE_LENGTH = 500
-const MAX_AVATAR_URL_LENGTH = 1024
 const HISTORY_PAGE_SIZE = 50
 const HISTORY_PAGE_LIMIT = 100
 const CHAT_THROTTLE_MS = 1500
@@ -12,7 +11,6 @@ const getDefaultSessionMeta = () => ({
   roomId: DEFAULT_ROOM_ID,
   userId: '',
   username: '',
-  avatarUrl: '',
   authenticated: false,
   lastMessageAt: 0,
   lastHistoryLoadAt: 0,
@@ -33,13 +31,6 @@ const getRoomIdFromUrl = (url) => normalizeRoomId(url.searchParams.get('roomId')
 const sanitizeUsername = (value) => String(value || '').trim().slice(0, MAX_USERNAME_LENGTH)
 
 const sanitizeContent = (value) => String(value || '').trim().slice(0, MAX_MESSAGE_LENGTH)
-
-const sanitizeAvatarUrl = (value) => {
-  const raw = String(value || '').trim().slice(0, MAX_AVATAR_URL_LENGTH)
-  if (!raw) return ''
-  if (!/^https?:\/\//i.test(raw)) return ''
-  return raw
-}
 
 const parsePositiveInt = (value, fallback) => {
   const n = Number.parseInt(value, 10)
@@ -124,7 +115,6 @@ const verifyStudyToken = async (token, env) => {
     return {
       userId: payload.sub,
       username: sanitizeUsername(payload.username || payload.sub.slice(0, 8)),
-      avatarUrl: sanitizeAvatarUrl(payload.avatar_url),
     }
   } catch {
     return null
@@ -203,7 +193,6 @@ export class OnlineCounter {
       roomId: normalizeRoomId(meta.roomId ?? current.roomId),
       userId: String(meta.userId ?? current.userId ?? '').slice(0, 128),
       username: sanitizeUsername(meta.username ?? current.username),
-      avatarUrl: sanitizeAvatarUrl(meta.avatarUrl ?? current.avatarUrl),
       authenticated: Boolean(meta.authenticated ?? current.authenticated),
       lastMessageAt: Number(meta.lastMessageAt ?? current.lastMessageAt) || 0,
       lastHistoryLoadAt: Number(meta.lastHistoryLoadAt ?? current.lastHistoryLoadAt) || 0,
@@ -247,7 +236,6 @@ export class OnlineCounter {
       roomId,
       userId: auth?.userId || '',
       username: auth?.username || sanitizeUsername(url.searchParams.get('username')),
-      avatarUrl: auth?.avatarUrl || '',
       authenticated: Boolean(auth),
     })
 
@@ -324,7 +312,6 @@ export class OnlineCounter {
     this.setSessionMeta(ws, {
       userId: auth.userId,
       username: auth.username,
-      avatarUrl: auth.avatarUrl,
       authenticated: true,
     })
     this.sendJson(ws, {
@@ -332,7 +319,6 @@ export class OnlineCounter {
       ok: true,
       userId: auth.userId,
       username: auth.username,
-      avatar_url: auth.avatarUrl,
     })
     this.broadcastPresence(meta.roomId)
   }
@@ -386,13 +372,11 @@ export class OnlineCounter {
     }
 
     const username = meta.username || sanitizeUsername(data.username) || '游客'
-    const avatarUrl = meta.avatarUrl || ''
     const chatMessage = {
       id: crypto.randomUUID(),
       roomId: meta.roomId,
       userId: meta.authenticated ? meta.userId : '',
       username,
-      avatarUrl,
       content,
       createdAt: new Date(now).toISOString(),
     }
@@ -470,7 +454,7 @@ export class OnlineCounter {
       const stmt = before
         ? this.env.CHAT_DB
             .prepare(`
-              SELECT id, room_id, user_id, username, avatar_url, content, created_at
+              SELECT id, room_id, user_id, username, content, created_at
               FROM chat_messages
               WHERE room_id = ? AND created_at < ?
               ORDER BY created_at DESC
@@ -479,7 +463,7 @@ export class OnlineCounter {
             .bind(roomId, before, fetchLimit)
         : this.env.CHAT_DB
             .prepare(`
-              SELECT id, room_id, user_id, username, avatar_url, content, created_at
+              SELECT id, room_id, user_id, username, content, created_at
               FROM chat_messages
               WHERE room_id = ?
               ORDER BY created_at DESC
@@ -497,7 +481,6 @@ export class OnlineCounter {
           roomId: String(row.room_id),
           userId: String(row.user_id || ''),
           username: String(row.username || ''),
-          avatarUrl: String(row.avatar_url || ''),
           content: String(row.content || ''),
           createdAt: new Date(Number(row.created_at)).toISOString(),
         })),
@@ -523,10 +506,10 @@ export class OnlineCounter {
           .bind(message.roomId, message.roomId, createdAt, createdAt),
         this.env.CHAT_DB
           .prepare(`
-            INSERT INTO chat_messages (id, room_id, user_id, username, avatar_url, content, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO chat_messages (id, room_id, user_id, username, content, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
           `)
-          .bind(message.id, message.roomId, message.userId, message.username, message.avatarUrl || '', message.content, createdAt),
+          .bind(message.id, message.roomId, message.userId, message.username, message.content, createdAt),
       ])
     } catch (err) {
       console.error('D1 save error:', err)

@@ -61,7 +61,7 @@
           </div>
           <div class="chat-message-bubble">
             <div class="chat-message-meta">
-              <span class="chat-message-name">{{ message.username || '游客' }}</span>
+              <span class="chat-message-name">{{ resolveUsername(message) || '游客' }}</span>
               <span class="chat-message-time">{{ formatChatTime(message.createdAt) }}</span>
             </div>
             <div class="chat-message-content">{{ message.content }}</div>
@@ -174,7 +174,7 @@ const getAvatarColor = (seed) => {
 
 const resolveUsername = (message) => {
   const fromProfile = message.userId ? props.profiles[message.userId]?.username : null
-  return (message.username || fromProfile || '').trim()
+  return (fromProfile || message.username || '').trim()
 }
 
 const getAvatarInitial = (message) => {
