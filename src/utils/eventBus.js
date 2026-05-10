@@ -42,7 +42,8 @@ export const fadeVolume = (targetVolume, duration = 500) => {
 
 export const duckMusicForNotification = async (notificationDuration = 3000) => {
   if (!aplayerInstance) return
-  
+  if (aplayerInstance.audio.volume <= 0) return
+
   originalVolume.value = aplayerInstance.audio.volume
   const duckedVolume = originalVolume.value * 0.2
   
