@@ -60,9 +60,9 @@ import AnnouncementModal from './components/AnnouncementModal.vue'
 const APLAYER_SETTINGS_KEY = 'aplayer_settings'
 
 const defaultAPlayerSettings = {
-  volume: 0.7,
+  volume: 1,
   loop: 'all',
-  order: 'list',
+  order: 'random',
   listFolded: false
 }
 
@@ -297,21 +297,32 @@ onMounted(() => {
     
     const currentSettings = { ...savedSettings }
     aplayer.value.on('volumechange', () => {
-      currentSettings.volume = aplayer.value.volume
+      currentSettings.volume = aplayer.value.audio.volume
       saveAPlayerSettings(currentSettings)
     })
-    aplayer.value.on('loopchange', () => {
-      currentSettings.loop = aplayer.value.loop
+   aplayer.value.on('listshow', () => {
+      currentSettings.listFolded = false
       saveAPlayerSettings(currentSettings)
     })
-    aplayer.value.on('orderchange', () => {
-      currentSettings.order = aplayer.value.order
+    aplayer.value.on('listhide', () => {
+      currentSettings.listFolded = true
       saveAPlayerSettings(currentSettings)
     })
-    aplayer.value.on('listfoldchange', () => {
-      currentSettings.listFolded = aplayer.value.listFolded
-      saveAPlayerSettings(currentSettings)
-    })
+    const saveModesAfterTick = () => {
+      setTimeout(() => {
+        if (!aplayer.value || !aplayer.value.options) return
+        currentSettings.loop = aplayer.value.options.loop
+        currentSettings.order = aplayer.value.options.order
+        saveAPlayerSettings(currentSettings)
+      }, 0)
+    }
+    const modeClickHandler = (e) => {
+      const target = e.target
+      if (!target || !target.closest) return
+      if (target.closest('.aplayer-icon-loop') || target.closest('.aplayer-icon-order')) {
+        saveModesAfterTick()
+      }
+    }
     
     // 设置播放器样式
     const playerElement = document.getElementById('aplayer')
@@ -323,6 +334,7 @@ onMounted(() => {
       playerElement.addEventListener('mouseleave', onUIMouseLeave)
       playerElement.addEventListener('touchstart', onUITouchStart)
       playerElement.addEventListener('touchend', onUITouchEnd)
+      playerElement.addEventListener('click', modeClickHandler)
     }
     aplayerInitialized.value = true
     setAPlayerInstance(aplayer.value)
