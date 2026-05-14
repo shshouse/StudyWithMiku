@@ -8,9 +8,5 @@ entry-point = "."
 [env.production]
 
 [[routes]]
-pattern = "https://study.mikugame.icu/*"
-custom_domain = true
-
-[[routes]]
 pattern = "https://study.mikumod.com/*"
 custom_domain = true

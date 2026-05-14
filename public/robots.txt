@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://study.mikugame.icu/sitemap.xml
+Sitemap: https://study.mikumod.com/sitemap.xml

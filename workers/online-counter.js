@@ -128,7 +128,6 @@ const getAllowedOrigins = (env) => {
     .filter(Boolean)
 
   return Array.from(new Set([
-    'https://study.mikugame.icu',
     'https://study.mikumod.com',
     ...configured,
   ]))

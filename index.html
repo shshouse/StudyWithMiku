@@ -9,7 +9,8 @@
     <meta name="author" content="SHSHOUSE">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://study.mikumod.com/">
-    <meta property="og:type" content="website">
+    <link rel="alternate" hreflang="zh-CN" href="https://study.mikumod.com/">
+    <link rel="alternate" hreflang="x-default" href="https://study.mikumod.com/">
     <meta property="og:title" content="Study with Miku - 和初音未来一起学习">
     <meta property="og:description" content="沉浸式学习陪伴网站，提供番茄钟、背景音乐播放等功能，让学习更有趣。">
     <meta property="og:url" content="https://study.mikumod.com/">
@@ -36,13 +37,26 @@
         "@context": "https://schema.org",
         "@type": "WebApplication",
         "name": "Study with Miku",
-        "description": "和初音未来一起学习的沉浸式学习陪伴网站",
+        "alternateName": "初音未来主题自习室",
+        "description": "和初音未来一起学习的沉浸式学习陪伴网站，提供番茄钟、背景音乐、白噪音等功能",
         "url": "https://study.mikumod.com/",
+        "image": "https://study.mikumod.com/web-app-manifest-512x512.png",
+        "inLanguage": "zh-CN",
         "applicationCategory": "EducationalApplication",
         "operatingSystem": "Web Browser",
+        "browserRequirements": "Requires JavaScript",
+        "isAccessibleForFree": true,
+        "featureList": [
+            "番茄钟计时",
+            "可爱Miku背景！",
+            "歌词显示",
+            "沉浸式学习视频背景",
+            "全屏专注模式"
+        ],
         "author": {
             "@type": "Organization",
-            "name": "SHSHOUSE"
+            "name": "SHSHOUSE",
+            "url": "https://mikumod.com"
         },
         "offers": {
             "@type": "Offer",
@@ -53,6 +67,20 @@
     </script>
 </head>
 <body>
+    <noscript>
+        <h1>Study with Miku - 初音未来主题自习室</h1>
+        <p>和初音一起学习！这是一个沉浸式学习陪伴网站，提供番茄钟、音乐播放、歌词显示、白噪音等功能，帮助你专注学习。</p>
+        <p>本站为单页应用（SPA），需要启用JavaScript才能正常使用完整功能。</p>
+        <h2>主要功能</h2>
+        <ul>
+            <li>番茄钟计时器（Pomodoro Timer）</li>
+            <li>初音未来主题背景视频</li>
+            <li>背景音乐播放器（支持网易云、QQ音乐歌单）</li>
+            <li>实时歌词显示</li>
+            <li>全屏专注模式</li>
+        </ul>
+        <p>关键词：Study With Miku、初音未来、学习、番茄钟、专注、白噪音、Miku、VOCALOID、在线自习室</p>
+    </noscript>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
 </body>
