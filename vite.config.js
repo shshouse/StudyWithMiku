@@ -21,7 +21,7 @@ export default defineConfig({
     analyticsPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'robots.txt', '*.mp3', '*.mp4'],
+      includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png', 'robots.txt', '*.mp3', '*.mp4'],
       manifest: {
         name: 'Study with Miku - 初音未来主题自习室',
         short_name: 'Study with Miku',
@@ -29,21 +29,33 @@ export default defineConfig({
         theme_color: '#39c5bb',
         background_color: '#ffffff',
         display: 'standalone',
+        start_url: '/',
+        lang: 'zh-CN',
+        categories: ['education', 'productivity'],
         icons: [
           {
-            src: '/favicon.ico',
-            sizes: '64x64 32x32 24x24 16x16',
-            type: 'image/x-icon'
-          },
-          {
-            src: '/favicon.ico',
+            src: '/web-app-manifest-192x192.png',
             sizes: '192x192',
-            type: 'image/x-icon'
+            type: 'image/png',
+            purpose: 'any'
           },
           {
-            src: '/favicon.ico',
+            src: '/web-app-manifest-512x512.png',
             sizes: '512x512',
-            type: 'image/x-icon'
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/web-app-manifest-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable'
+          },
+          {
+            src: '/web-app-manifest-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       },

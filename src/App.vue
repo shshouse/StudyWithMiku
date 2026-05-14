@@ -63,7 +63,8 @@ const defaultAPlayerSettings = {
   volume: 1,
   loop: 'all',
   order: 'random',
-  listFolded: false
+  listFolded: false,
+  lrcShow: true
 }
 
 const getAPlayerSettings = () => {
@@ -314,14 +315,17 @@ onMounted(() => {
         currentSettings.loop = aplayer.value.options.loop
         currentSettings.order = aplayer.value.options.order
         saveAPlayerSettings(currentSettings)
-      }, 0)
+      }, 50)
     }
-    const modeClickHandler = (e) => {
-      const target = e.target
-      if (!target || !target.closest) return
-      if (target.closest('.aplayer-icon-loop') || target.closest('.aplayer-icon-order')) {
-        saveModesAfterTick()
-      }
+    const saveLrcState = () => {
+      setTimeout(() => {
+        if (!aplayer.value) return
+        const lrcWrap = document.querySelector('.aplayer-lrc')
+        const lrcButton = document.querySelector('.aplayer-icon-lrc')
+        const isHidden = lrcWrap?.classList.contains('aplayer-lrc-hide') || lrcButton?.classList.contains('aplayer-icon-lrc-inactivity')
+        currentSettings.lrcShow = !isHidden
+        saveAPlayerSettings(currentSettings)
+      }, 50)
     }
     
     // 设置播放器样式
@@ -334,11 +338,27 @@ onMounted(() => {
       playerElement.addEventListener('mouseleave', onUIMouseLeave)
       playerElement.addEventListener('touchstart', onUITouchStart)
       playerElement.addEventListener('touchend', onUITouchEnd)
-      playerElement.addEventListener('click', modeClickHandler)
+
+      const loopBtn = playerElement.querySelector('.aplayer-icon-loop')
+      const orderBtn = playerElement.querySelector('.aplayer-icon-order')
+      const lrcBtn = playerElement.querySelector('.aplayer-icon-lrc')
+      if (loopBtn) loopBtn.addEventListener('click', saveModesAfterTick)
+      if (orderBtn) orderBtn.addEventListener('click', saveModesAfterTick)
+      if (lrcBtn) lrcBtn.addEventListener('click', saveLrcState)
     }
     aplayerInitialized.value = true
     setAPlayerInstance(aplayer.value)
     setupCrossfade(aplayer.value)
+
+    if (!savedSettings.lrcShow) {
+      const lrcButton = document.querySelector('.aplayer-icon-lrc')
+      if (lrcButton) {
+        lrcButton.classList.add('aplayer-icon-lrc-inactivity')
+      }
+      if (aplayer.value.lrc) {
+        aplayer.value.lrc.hide()
+      }
+    }
     
     const handleMediaKeys = (e) => {
       if (!aplayer.value) return
