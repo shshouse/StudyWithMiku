@@ -33,9 +33,6 @@
     <!-- 番茄钟！＞﹏＜ -->
     <PomodoroTimer :showControls="showControls" />
     
-    <!-- 入站公告弹窗 -->
-    <AnnouncementModal />
-    
     <!-- APlayer 播放器 -->
     <div id="aplayer" class="aplayer-container"></div>
   </div>
@@ -50,7 +47,6 @@ import { useMusic } from './composables/useMusic.js'
 import { useCrossfade } from './composables/useCrossfade.js'
 import { getVideoIndex, saveVideoIndex, getMusicIndex, saveMusicIndex } from './utils/userSettings.js'
 import PomodoroTimer from './components/PomodoroTimer.vue'
-import AnnouncementModal from './components/AnnouncementModal.vue'
 
 const APLAYER_SETTINGS_KEY = 'aplayer_settings'
 
