@@ -295,7 +295,7 @@ const restoreScrollPosition = async () => {
 }
 
 const submit = () => {
-  if (!isLoggedIn) {
+  if (!props.isLoggedIn) {
     emit('login')
     return
   }
