@@ -163,6 +163,39 @@ const aplayerInitialized = ref(false)
 const { songs, loadSongs, loading } = useMusic()
 const { setupCrossfade, cleanup: cleanupCrossfade } = useCrossfade()
 
+const getCurrentAudio = () => {
+  const ap = aplayer.value
+  if (!ap) return null
+  const index = ap.list?.index ?? 0
+  return ap.list?.audios?.[index] || songs.value[index] || null
+}
+
+const getArtworkType = (src) => {
+  if (!src) return undefined
+  const pathname = src.split('?')[0].toLowerCase()
+  if (pathname.endsWith('.png')) return 'image/png'
+  if (pathname.endsWith('.webp')) return 'image/webp'
+  return 'image/jpeg'
+}
+
+const updateMediaSessionMetadata = () => {
+  if (!('mediaSession' in navigator) || !('MediaMetadata' in window)) return
+  const audio = getCurrentAudio()
+  if (!audio) return
+  const artwork = audio.cover ? [{ src: audio.cover, sizes: '512x512', type: getArtworkType(audio.cover) }] : []
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: audio.name || 'Study With Miku',
+    artist: audio.artist || 'Miku',
+    album: 'Study With Miku',
+    artwork
+  })
+}
+
+const updateMediaSessionPlaybackState = () => {
+  if (!('mediaSession' in navigator) || !aplayer.value?.audio) return
+  navigator.mediaSession.playbackState = aplayer.value.audio.paused ? 'paused' : 'playing'
+}
+
 let videoStalledTimer = null
 const onVideoLoaded = () => {
   if (videoStalledTimer) { clearTimeout(videoStalledTimer); videoStalledTimer = null }
@@ -275,6 +308,15 @@ onMounted(() => {
     
     aplayer.value.on('listswitch', (e) => {
       saveMusicIndex(e.index)
+      updateMediaSessionMetadata()
+      updateMediaSessionPlaybackState()
+    })
+    aplayer.value.on('play', () => {
+      updateMediaSessionMetadata()
+      updateMediaSessionPlaybackState()
+    })
+    aplayer.value.on('pause', () => {
+      updateMediaSessionPlaybackState()
     })
     
     const currentSettings = { ...savedSettings }
@@ -330,6 +372,8 @@ onMounted(() => {
     aplayerInitialized.value = true
     setAPlayerInstance(aplayer.value)
     setupCrossfade(aplayer.value)
+    updateMediaSessionMetadata()
+    updateMediaSessionPlaybackState()
 
     if (!savedSettings.lrcShow) {
       const lrcButton = document.querySelector('.aplayer-icon-lrc')
@@ -364,15 +408,19 @@ onMounted(() => {
     if ('mediaSession' in navigator) {
       navigator.mediaSession.setActionHandler('nexttrack', () => {
         aplayer.value?.skipForward()
+        setTimeout(updateMediaSessionMetadata, 0)
       })
       navigator.mediaSession.setActionHandler('previoustrack', () => {
         aplayer.value?.skipBack()
+        setTimeout(updateMediaSessionMetadata, 0)
       })
       navigator.mediaSession.setActionHandler('play', () => {
         aplayer.value?.play()
+        setTimeout(updateMediaSessionPlaybackState, 0)
       })
       navigator.mediaSession.setActionHandler('pause', () => {
         aplayer.value?.pause()
+        setTimeout(updateMediaSessionPlaybackState, 0)
       })
     }
   }
