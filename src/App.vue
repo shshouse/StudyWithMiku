@@ -196,6 +196,38 @@ const updateMediaSessionPlaybackState = () => {
   navigator.mediaSession.playbackState = aplayer.value.audio.paused ? 'paused' : 'playing'
 }
 
+const updateMediaSessionPositionState = () => {
+  if (!('mediaSession' in navigator) || typeof navigator.mediaSession.setPositionState !== 'function') return
+  const audio = aplayer.value?.audio
+  if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return
+  const position = Math.min(Math.max(audio.currentTime || 0, 0), audio.duration)
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: audio.duration,
+      playbackRate: audio.playbackRate || 1,
+      position
+    })
+  } catch (e) { }
+}
+
+const syncMediaSession = (includeMetadata = false) => {
+  if (includeMetadata) updateMediaSessionMetadata()
+  updateMediaSessionPlaybackState()
+  updateMediaSessionPositionState()
+}
+
+let lastMediaSessionSyncAt = 0
+const syncMediaSessionThrottled = () => {
+  const now = Date.now()
+  if (now - lastMediaSessionSyncAt < 15000) return
+  lastMediaSessionSyncAt = now
+  syncMediaSession()
+}
+
+const handleMediaSessionVisibilityChange = () => {
+  if (document.visibilityState === 'visible') syncMediaSession(true)
+}
+
 let videoStalledTimer = null
 const onVideoLoaded = () => {
   if (videoStalledTimer) { clearTimeout(videoStalledTimer); videoStalledTimer = null }
@@ -308,19 +340,19 @@ onMounted(() => {
     
     aplayer.value.on('listswitch', (e) => {
       saveMusicIndex(e.index)
-      updateMediaSessionMetadata()
-      updateMediaSessionPlaybackState()
+      syncMediaSession(true)
     })
     aplayer.value.on('play', () => {
-      updateMediaSessionMetadata()
-      updateMediaSessionPlaybackState()
+      syncMediaSession(true)
     })
     aplayer.value.on('pause', () => {
-      updateMediaSessionPlaybackState()
+      syncMediaSession()
     })
+    aplayer.value.on('timeupdate', syncMediaSessionThrottled)
     
     const currentSettings = { ...savedSettings }
     aplayer.value.on('volumechange', () => {
+      if (Date.now() < (aplayer.value._mikuSuppressVolumeSaveUntil || 0)) return
       currentSettings.volume = aplayer.value.audio.volume
       saveAPlayerSettings(currentSettings)
     })
@@ -371,9 +403,8 @@ onMounted(() => {
     }
     aplayerInitialized.value = true
     setAPlayerInstance(aplayer.value)
-    setupCrossfade(aplayer.value)
-    updateMediaSessionMetadata()
-    updateMediaSessionPlaybackState()
+    setupCrossfade(aplayer.value, () => syncMediaSession(true))
+    syncMediaSession(true)
 
     if (!savedSettings.lrcShow) {
       const lrcButton = document.querySelector('.aplayer-icon-lrc')
@@ -408,22 +439,23 @@ onMounted(() => {
     if ('mediaSession' in navigator) {
       navigator.mediaSession.setActionHandler('nexttrack', () => {
         aplayer.value?.skipForward()
-        setTimeout(updateMediaSessionMetadata, 0)
+        setTimeout(() => syncMediaSession(true), 0)
       })
       navigator.mediaSession.setActionHandler('previoustrack', () => {
         aplayer.value?.skipBack()
-        setTimeout(updateMediaSessionMetadata, 0)
+        setTimeout(() => syncMediaSession(true), 0)
       })
       navigator.mediaSession.setActionHandler('play', () => {
         aplayer.value?.play()
-        setTimeout(updateMediaSessionPlaybackState, 0)
+        setTimeout(() => syncMediaSession(true), 0)
       })
       navigator.mediaSession.setActionHandler('pause', () => {
         aplayer.value?.pause()
-        setTimeout(updateMediaSessionPlaybackState, 0)
+        setTimeout(() => syncMediaSession(), 0)
       })
     }
   }
+  document.addEventListener('visibilitychange', handleMediaSessionVisibilityChange)
   preloadAllVideos()
   setTimeout(() => {
     loadAPlayer()
@@ -431,6 +463,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('visibilitychange', handleMediaSessionVisibilityChange)
   if (aplayer.value) {
     cleanupCrossfade(aplayer.value)
     aplayer.value.destroy()
