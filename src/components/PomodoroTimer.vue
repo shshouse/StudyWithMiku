@@ -55,11 +55,11 @@
           <div class="settings-body">
             <div class="settings-nav">
               <button class="nav-item" :class="{ active: currentTab === 'pomodoro' }" @click="currentTab = 'pomodoro'">番茄钟</button>
+              <button class="nav-item" :class="{ active: currentTab === 'chat' }" @click="currentTab = 'chat'">聊天室</button>
               <button class="nav-item" :class="{ active: currentTab === 'calendar' }" @click="currentTab = 'calendar'">学习日历</button>
               <button class="nav-item" :class="{ active: currentTab === 'todos' }" @click="currentTab = 'todos'">待办列表</button>
               <button class="nav-item" :class="{ active: currentTab === 'playlist' }" @click="openPlaylistTab">歌单<span v-if="hasNewPlaylist" class="update-dot"></span></button>
               <button class="nav-item" :class="{ active: currentTab === 'sync' }" @click="currentTab = 'sync'">云同步</button>
-              <button class="nav-item" :class="{ active: currentTab === 'chat' }" @click="currentTab = 'chat'">聊天室(测试)</button>
               <button class="nav-item" :class="{ active: currentTab === 'updates' }" @click="openUpdatesTab">更新日志<span v-if="hasNewUpdate" class="update-dot"></span></button>
               <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="openAboutTab">关于<span v-if="!qqGroupSeen" class="update-dot"></span></button>
             </div>
