@@ -361,7 +361,7 @@ export const useCrossfade = () => {
   const fadeMusicIn = (ap, targetVol = null, durationInSec = 2, options = {}) => {
     if (!ap) return
     if (fadeAnimationId) { cancelAnimationFrame(fadeAnimationId); fadeAnimationId = null }
-    const finalVol = targetVol !== null ? targetVol : (ap._fadeLastVolume || 0.7)
+    const finalVol = targetVol !== null ? targetVol : (ap._fadeLastVolume || ap.audio.volume || 0.7)
     if (options.immediate || !shouldAnimateAudio()) {
       setPlayerVolume(ap, finalVol)
       if (ap.audio.paused) { try { const p = ap.play(); if (p && p.catch) p.catch(() => { }) } catch (e) { } }
