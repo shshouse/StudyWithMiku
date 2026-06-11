@@ -1,4 +1,4 @@
-const METING_API = 'https://api.injahow.cn/meting/'
+const METING_API = import.meta.env.VITE_METING_API
 const DEFAULT_PLAYLIST_ID = '17543418420'
 import { songNameMap } from '../data/songNameMap.js'
 
