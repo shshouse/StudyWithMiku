@@ -54,14 +54,30 @@
           </div>
           <div class="settings-body">
             <div class="settings-nav">
-              <button class="nav-item" :class="{ active: currentTab === 'pomodoro' }" @click="currentTab = 'pomodoro'">番茄钟</button>
-              <button class="nav-item" :class="{ active: currentTab === 'chat' }" @click="currentTab = 'chat'">聊天室</button>
-              <button class="nav-item" :class="{ active: currentTab === 'calendar' }" @click="currentTab = 'calendar'">学习日历</button>
-              <button class="nav-item" :class="{ active: currentTab === 'todos' }" @click="currentTab = 'todos'">待办列表</button>
-              <button class="nav-item" :class="{ active: currentTab === 'playlist' }" @click="openPlaylistTab">歌单<span v-if="hasNewPlaylist" class="update-dot"></span></button>
-              <button class="nav-item" :class="{ active: currentTab === 'sync' }" @click="currentTab = 'sync'">云同步</button>
-              <button class="nav-item" :class="{ active: currentTab === 'updates' }" @click="openUpdatesTab">更新日志<span v-if="hasNewUpdate" class="update-dot"></span></button>
-              <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="openAboutTab">关于<span v-if="!qqGroupSeen" class="update-dot"></span></button>
+              <button class="nav-item" :class="{ active: currentTab === 'pomodoro' }" @click="currentTab = 'pomodoro'">
+                <Timer :size="16" class="nav-icon" />番茄钟
+              </button>
+              <button class="nav-item" :class="{ active: currentTab === 'todos' }" @click="currentTab = 'todos'">
+                <CheckSquare :size="16" class="nav-icon" />待办列表
+              </button>
+              <button class="nav-item" :class="{ active: currentTab === 'playlist' }" @click="openPlaylistTab">
+                <Music :size="16" class="nav-icon" />音乐设置<span v-if="hasNewPlaylist" class="update-dot"></span>
+              </button>
+              <button class="nav-item" :class="{ active: currentTab === 'chat' }" @click="currentTab = 'chat'">
+                <MessageSquare :size="16" class="nav-icon" />聊天室
+              </button>
+              <button class="nav-item" :class="{ active: currentTab === 'calendar' }" @click="currentTab = 'calendar'">
+                <Calendar :size="16" class="nav-icon" />学习日历
+              </button>
+              <button class="nav-item" :class="{ active: currentTab === 'sync' }" @click="currentTab = 'sync'">
+                <CloudUpload :size="16" class="nav-icon" />云同步
+              </button>
+              <button class="nav-item" :class="{ active: currentTab === 'updates' }" @click="openUpdatesTab">
+                <History :size="16" class="nav-icon" />更新日志<span v-if="hasNewUpdate" class="update-dot"></span>
+              </button>
+              <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="openAboutTab">
+                <Info :size="16" class="nav-icon" />关于<span v-if="!qqGroupSeen" class="update-dot"></span>
+              </button>
             </div>
             <div class="settings-content">
               <transition name="tab-fade" mode="out-in">
@@ -163,10 +179,14 @@
               </div>
 
               <div v-else-if="currentTab === 'playlist'" class="playlist-container">
-                <div class="setting-group">
+                <div class="setting-group setting-group-row">
                   <label>平台</label>
                   <select v-model="selectedPlatform" class="platform-select">
                     <option v-for="p in PLATFORMS" :key="p.value" :value="p.value">{{ p.label }}</option>
+                  </select>
+                  <label>音质</label>
+                  <select v-model="selectedBitrate" class="platform-select">
+                    <option v-for="b in BITRATE_OPTIONS" :key="b.value" :value="b.value">{{ b.label }}</option>
                   </select>
                 </div>
                 <div class="setting-group">
@@ -382,6 +402,7 @@
 
 <script setup>
   import { ref, computed, onMounted, onUnmounted, watch, reactive, nextTick } from 'vue'
+  import { Timer, CheckSquare, Music, MessageSquare, Calendar, CloudUpload, History, Info } from 'lucide-vue-next'
   import { useOnlineCount } from '../composables/useOnlineCount.js'
   import { useMusic } from '../composables/useMusic.js'
   import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
@@ -443,7 +464,7 @@ const props = defineProps({
 const { token, username, userId, tokenUserChanged, sessionExpired, isLoggedIn, login, logout, clearTokenUserChanged, clearSessionExpired, isTokenExpired } = useStudyAuth()
 const { onlineCount, adminOnline, isConnected, isAuthenticated, messages, chatError, hasMoreHistory, isLoadingHistory, sendChatMessage, loadMoreMessages } = useOnlineCount(import.meta.env.VITE_WS_URL, { username, token })
 const { profiles: userProfiles, ensureProfiles } = useUserProfiles()
-const { playlistId, platform, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS } = useMusic()
+const { playlistId, platform, bitrate, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS, BITRATE_OPTIONS, setBitrate } = useMusic()
 const { syncStatus, lastSyncTime, fetchRemoteData, syncOnLogin, pushCalendar, fetchCalendar, pushAll } = useStudySync()
 const { crossfadeEnabled, toggleCrossfade, fadeMusicOut, fadeMusicIn } = useCrossfade()
 const { recordStudyTime: calendarRecordStudy, recordPomodoro: calendarRecordPomodoro, getCalendarData, setCalendarData } = useCalendar()
@@ -528,6 +549,28 @@ const resetPomodoroSettings = () => {
 
 const inputPlaylistId = ref('')
 const selectedPlatform = ref(platform.value)
+const selectedBitrate = ref(bitrate.value)
+
+watch(selectedBitrate, (newVal) => {
+  const ap = getAPlayerInstance()
+  const currentIndex = ap ? ap.list.index : -1
+  const isPlaying = ap ? !ap.paused : false
+  setBitrate(newVal)
+  const checkAndReplace = () => {
+    const ap2 = getAPlayerInstance()
+    if (ap2 && songs.value.length > 0) {
+      ap2.list.clear()
+      ap2.list.add(songs.value)
+      if (currentIndex >= 0 && currentIndex < songs.value.length) {
+        ap2.list.switch(currentIndex)
+        if (isPlaying) {
+          setTimeout(() => { ap2.play() }, 100)
+        }
+      }
+    }
+  }
+  setTimeout(checkAndReplace, 500)
+})
 const currentTab = ref('pomodoro')
 const currentHitokoto = ref({ text: '', source: '' })
 const showHitokotoAnimation = ref(false)
@@ -1248,11 +1291,13 @@ const handleVisibilityChange = () => {
 .close-btn:hover { background: rgba(255, 255, 255, 0.1); }
 .settings-body { display: flex; flex: 1; overflow: hidden; }
 .settings-nav { display: flex; flex-direction: column; padding: 1rem 0; border-right: 1px solid rgba(255, 255, 255, 0.1); min-width: 100px; overflow-y: auto; flex-shrink: 0; }
-.nav-item { background: none; border: none; color: rgba(255, 255, 255, 0.6); padding: 0.8rem 1.2rem; text-align: left; cursor: pointer; transition: all 0.3s ease; font-size: 0.85rem; white-space: nowrap; }
+.nav-item { background: none; border: none; color: rgba(255, 255, 255, 0.6); padding: 0.8rem 1.2rem; text-align: left; cursor: pointer; transition: all 0.3s ease; font-size: 0.85rem; white-space: nowrap; display: flex; align-items: center; gap: 0.5rem; }
 .nav-item:hover { color: white; background: rgba(255, 255, 255, 0.05); }
 .nav-item.active { color: white; background: rgba(255, 255, 255, 0.1); border-left: 2px solid #ff6b6b; }
 .nav-item { position: relative; }
 .update-dot { display: inline-block; width: 6px; height: 6px; background: #ff4444; border-radius: 50%; margin-left: 4px; vertical-align: top; }
+.nav-icon { flex-shrink: 0; opacity: 0.85; }
+.nav-item:hover .nav-icon, .nav-item.active .nav-icon { opacity: 1; }
 
 @media (max-width: 768px) and (orientation: portrait) {
   .settings-body { flex-direction: column; }
@@ -1332,8 +1377,13 @@ const handleVisibilityChange = () => {
 .pomodoro-dot.filled { background: #ff6b6b; }
 .playlist-settings { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255, 255, 255, 0.1); }
 .playlist-container { padding: 2rem 0; display: flex; flex-direction: column; align-items: center; }
-.playlist-container .setting-group { margin-bottom: 1.5rem; width: 100%; max-width: 400px; display: flex; align-items: center; gap: 1rem; }
-.playlist-container .setting-group label { display: inline-block; margin-bottom: 0; font-size: 0.95rem; color: rgba(255, 255, 255, 0.9); min-width: 60px; flex-shrink: 0; }
+.playlist-container .setting-group { margin-bottom: 1.5rem; width: 100%; display: flex; align-items: center; gap: 0.75rem; }
+.playlist-container .setting-group:not(.setting-group-row) { max-width: 400px; }
+.playlist-container .setting-group-row { max-width: 480px; }
+.playlist-container .setting-group-row > * { min-width: 0; }
+.playlist-container .setting-group-row > select { flex: 1; }
+.playlist-container .setting-group-row > label:first-child, .playlist-container .setting-group-row > label:nth-child(3) { flex: 0 0 auto; min-width: 42px; }
+.playlist-container .setting-group label { display: inline-block; margin-bottom: 0; font-size: 0.95rem; color: rgba(255, 255, 255, 0.9); min-width: 42px; flex-shrink: 0; }
 .playlist-container .setting-group input { flex: 1; text-align: left; padding: 0.6rem 1rem; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: white; font-size: 0.95rem; transition: all 0.3s ease; }
 
 @media (max-width: 768px) {
@@ -1344,7 +1394,7 @@ const handleVisibilityChange = () => {
 .playlist-container .setting-group input:focus { outline: none; border-color: rgba(41, 128, 185, 0.6); background: rgba(255, 255, 255, 0.12); }
 .playlist-container .setting-group input::placeholder { color: rgba(255, 255, 255, 0.4); }
 .playlist-settings .setting-group input { width: 140px; text-align: left; padding: 0.3rem 0.5rem; }
-.platform-select { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 0.6rem 1rem; color: white; flex: 1; cursor: pointer; }
+.platform-select { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 0.6rem 1rem; color: white; flex: 1; cursor: pointer; text-overflow: ellipsis; min-width: 0; }
 .playlist-container .platform-select { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; }
 .playlist-container .platform-select:focus { outline: none; border-color: rgba(41, 128, 185, 0.6); background: rgba(255, 255, 255, 0.12); }
 .platform-select option { background: #333; color: white; }

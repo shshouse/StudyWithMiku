@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { fetchPlaylist, getStoredConfig, saveConfig, DEFAULT_PLAYLIST_ID } from '../services/meting.js'
+import { fetchPlaylist, getStoredConfig, saveConfig, DEFAULT_PLAYLIST_ID, DEFAULT_BITRATE, BITRATE_OPTIONS } from '../services/meting.js'
 import { localSongsData } from '../data/localSongs.js'
 
 const songs = ref([])
@@ -7,6 +7,7 @@ const loading = ref(false)
 const metingConfig = ref(getStoredConfig())
 const playlistId = ref(localStorage.getItem('playlist_id') || DEFAULT_PLAYLIST_ID)
 const platform = ref(localStorage.getItem('music_platform') || 'netease')
+const bitrate = ref(localStorage.getItem('music_bitrate') || DEFAULT_BITRATE)
 
 const PLATFORMS = [
   { value: 'netease', label: '网易云' },
@@ -22,7 +23,7 @@ export const useMusic = () => {
       if (platform === 'local') {
         playlist = localSongsData[id] || []
       } else {
-        playlist = await fetchPlaylist(platform, id)
+        playlist = await fetchPlaylist(platform, id, bitrate.value)
         
         if (id === '8894040639' && platform === 'netease') {
           const specialMusicSongs = localSongsData.special_music || []
@@ -64,6 +65,12 @@ export const useMusic = () => {
     localStorage.setItem('music_platform', p)
   }
 
+  const setBitrate = (br) => {
+    bitrate.value = br
+    localStorage.setItem('music_bitrate', br)
+    loadMetingSongs(platform.value, playlistId.value)
+  }
+
   const applyCustomPlaylist = async (p, id) => {
     setPlatform(p)
     setPlaylistId(id)
@@ -82,14 +89,17 @@ export const useMusic = () => {
     metingConfig,
     playlistId,
     platform,
+    bitrate,
     loadSongs,
     updateMetingPlaylist,
     setPlaylistId,
     resetPlaylistId,
     setPlatform,
+    setBitrate,
     applyCustomPlaylist,
     resetToLocal,
     DEFAULT_PLAYLIST_ID,
-    PLATFORMS
+    PLATFORMS,
+    BITRATE_OPTIONS
   }
 }

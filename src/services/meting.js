@@ -1,11 +1,20 @@
 const METING_API = import.meta.env.VITE_METING_API
 const DEFAULT_PLAYLIST_ID = '17543418420'
+const DEFAULT_BITRATE = '2000'
 import { songNameMap } from '../data/songNameMap.js'
 
-export { DEFAULT_PLAYLIST_ID }
+export { DEFAULT_PLAYLIST_ID, DEFAULT_BITRATE }
 
-export const fetchPlaylist = async (server = 'netease', id = DEFAULT_PLAYLIST_ID) => {
-  const url = `${METING_API}?server=${server}&type=playlist&id=${id}`
+export const BITRATE_OPTIONS = [
+  { value: '2000', label: '高音质' },
+  { value: '320', label: '标准音质' },
+]
+
+export const fetchPlaylist = async (server = 'netease', id = DEFAULT_PLAYLIST_ID, bitrate = DEFAULT_BITRATE) => {
+  let url = `${METING_API}?server=${server}&type=playlist&id=${id}`
+  if (bitrate && bitrate !== '320') {
+    url += `&br=${bitrate}`
+  }
   
   try {
     const response = await fetch(url)

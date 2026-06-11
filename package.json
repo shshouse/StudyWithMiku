@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@vueuse/core": "^10.1.2",
+    "lucide-vue-next": "^0.577.0",
     "vue": "^3.3.4"
   },
   "devDependencies": {
