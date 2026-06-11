@@ -17,5 +17,5 @@ B站视频介绍：
 
 ## 鸣谢
 - Aplayer: [Aplayer github](https://github.com/DIYgod/APlayer)
-- Meting: [Meting github](https://github.com/mikus-loli/Meting-API)
+- Meting: [Meting github](https://github.com/qijie233/MetingApi-qijie)
 - 图标来自: 
