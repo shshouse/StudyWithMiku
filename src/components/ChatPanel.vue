@@ -36,35 +36,49 @@
         <div v-else-if="messages.length > 0" class="chat-history-status chat-history-end">已经到顶啦</div>
         <div v-if="messages.length === 0" class="chat-empty">暂无消息，开始第一句聊天吧</div>
         <div
-          v-for="message in messages"
-          :key="message.id"
-          :data-mid="message.id"
-          class="chat-message"
-          :class="{ own: message.userId && message.userId === currentUserId }"
+          v-for="group in groupedMessages"
+          :key="group.key"
+          class="chat-message-group"
+          :class="{ own: group.messages[0].userId && group.messages[0].userId === currentUserId }"
         >
           <div
             class="chat-avatar"
-            :class="{ 'has-image': hasAvatarImage(message) }"
-            :style="hasAvatarImage(message) ? null : { background: getAvatarColor(getAvatarSeed(message)) }"
-            :aria-label="resolveUsername(message) || '游客'"
+            :class="{ 'has-image': hasAvatarImage(group.messages[0]) }"
+            :style="hasAvatarImage(group.messages[0]) ? null : { background: getAvatarColor(getAvatarSeed(group.messages[0])) }"
+            :aria-label="resolveUsername(group.messages[0]) || '游客'"
           >
             <img
-              v-if="hasAvatarImage(message)"
-              :src="getAvatarUrl(message)"
-              :alt="resolveUsername(message) || '游客'"
+              v-if="hasAvatarImage(group.messages[0])"
+              :src="getAvatarUrl(group.messages[0])"
+              :alt="resolveUsername(group.messages[0]) || '游客'"
               loading="lazy"
               decoding="async"
               referrerpolicy="no-referrer"
-              @error="onAvatarLoadError(getAvatarFailureKey(message))"
+              @error="onAvatarLoadError(getAvatarFailureKey(group.messages[0]))"
             />
-            <span v-else>{{ getAvatarInitial(message) }}</span>
+            <span v-else>{{ getAvatarInitial(group.messages[0]) }}</span>
           </div>
           <div class="chat-message-bubble">
             <div class="chat-message-meta">
-              <span class="chat-message-name">{{ resolveUsername(message) || '游客' }}</span>
-              <span class="chat-message-time">{{ formatChatTime(message.createdAt) }}</span>
+              <span class="chat-message-name">{{ resolveUsername(group.messages[0]) || '游客' }}</span>
+              <span class="chat-message-time">{{ formatChatTime(group.messages[0].createdAt) }}</span>
             </div>
-            <div class="chat-message-content">{{ message.content }}</div>
+            <div
+              v-for="message in group.messages"
+              :key="message.id"
+              :data-mid="message.id"
+              class="chat-message-item"
+            >
+              <img
+                v-if="renderStickerId(message.content) !== null"
+                :src="getStickerUrl(renderStickerId(message.content))"
+                :alt="`表情包 ${renderStickerId(message.content)}`"
+                class="chat-sticker chat-sticker-message"
+                loading="lazy"
+                decoding="async"
+              />
+              <template v-else>{{ message.content }}</template>
+            </div>
           </div>
         </div>
       </div>
@@ -85,14 +99,49 @@
     </div>
     <div v-if="chatError" class="chat-error">{{ chatError }}</div>
     <form class="chat-form" @submit.prevent="submit">
-      <input
-        v-model="chatInput"
-        class="chat-input"
-        type="text"
-        maxlength="500"
-        :placeholder="isLoggedIn ? '输入消息...' : '登录后可以发言'"
-        :disabled="!isConnected || !isLoggedIn || !isAuthenticated"
-      />
+      <div class="chat-input-wrapper">
+        <button
+          v-if="isLoggedIn"
+          type="button"
+          class="chat-sticker-toggle"
+          :class="{ active: showStickerPanel }"
+          :disabled="!isConnected || !isAuthenticated"
+          :aria-label="showStickerPanel ? '关闭表情包' : '打开表情包'"
+          :title="showStickerPanel ? '关闭表情包' : '发送表情包'"
+          @click="toggleStickerPanel"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+            <line x1="9" y1="9" x2="9.01" y2="9"></line>
+            <line x1="15" y1="9" x2="15.01" y2="9"></line>
+          </svg>
+        </button>
+        <input
+          v-model="chatInput"
+          class="chat-input"
+          type="text"
+          maxlength="500"
+          :placeholder="isLoggedIn ? '输入消息...' : '登录后可以发言'"
+          :disabled="!isConnected || !isLoggedIn || !isAuthenticated"
+          @input="onChatInput"
+        />
+        <transition name="sticker-pop">
+          <div v-if="showStickerPanel" class="chat-sticker-panel" @click.stop>
+            <button
+              v-for="id in STICKER_IDS"
+              :key="id"
+              type="button"
+              class="chat-sticker-item"
+              :title="`表情包 ${id}`"
+              :aria-label="`发送表情包 ${id}`"
+              @click="sendSticker(id)"
+            >
+              <img :src="getStickerUrl(id)" :alt="`表情包 ${id}`" loading="lazy" decoding="async" />
+            </button>
+          </div>
+        </transition>
+      </div>
       <button
         class="action-btn chat-send-btn"
         type="submit"
@@ -107,6 +156,7 @@
 
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { STICKER_IDS, getStickerId, getStickerUrl, buildStickerMessage } from '../data/stickers.js'
 
 const props = defineProps({
   messages: { type: Array, default: () => [] },
@@ -146,13 +196,50 @@ const autoScrollPending = ref(true)
 const isReady = ref(false)
 const unreadCount = ref(0)
 const avatarLoadFailures = reactive(new Set())
+const showStickerPanel = ref(false)
+
+const renderStickerId = (content) => getStickerId(content)
+const GROUP_GAP_MS = 2 * 60 * 1000
+
+const groupedMessages = computed(() => {
+  const list = props.messages
+  const groups = []
+  let current = null
+  const sameUser = (a, b) => {
+    if (!a || !b) return false
+    const aId = a.userId || a.username || ''
+    const bId = b.userId || b.username || ''
+    return aId && bId && aId === bId
+  }
+  const withinGap = (a, b) => {
+    if (!a || !b) return false
+    const ta = new Date(a.createdAt).getTime()
+    const tb = new Date(b.createdAt).getTime()
+    if (!Number.isFinite(ta) || !Number.isFinite(tb)) return false
+    return Math.abs(tb - ta) <= GROUP_GAP_MS
+  }
+  for (const message of list) {
+    if (current && sameUser(current.messages[current.messages.length - 1], message) && withinGap(current.messages[current.messages.length - 1], message)) {
+      current.messages.push(message)
+    } else {
+      current = { key: message.id, messages: [message] }
+      groups.push(current)
+    }
+  }
+  return groups
+})
 
 const showJumpToBottom = computed(() => isReady.value && !autoScrollPending.value)
 
 const formatChatTime = (value) => {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
-  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+  const y = String(date.getFullYear()).slice(-2)
+  const mo = String(date.getMonth() + 1)
+  const d = String(date.getDate())
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mm = String(date.getMinutes()).padStart(2, '0')
+  return `${y}.${mo}.${d} ${hh}:${mm}`
 }
 
 const getAvatarSeed = (message) => String(message.userId || message.username || 'guest')
@@ -309,8 +396,44 @@ const submit = () => {
   }
 }
 
+const toggleStickerPanel = () => {
+  showStickerPanel.value = !showStickerPanel.value
+}
+
+const closeStickerPanel = () => {
+  showStickerPanel.value = false
+}
+
+const sendSticker = (id) => {
+  if (!props.isLoggedIn) {
+    emit('login')
+    return
+  }
+  if (!props.isConnected || !props.isAuthenticated) return
+  const payload = buildStickerMessage(id)
+  if (!payload) return
+  if (props.sendMessage(payload)) {
+    autoScrollPending.value = true
+    unreadCount.value = 0
+    scrollChatToBottom()
+  }
+  closeStickerPanel()
+}
+
+const onChatInput = () => {
+  if (showStickerPanel.value && chatInput.value.trim()) closeStickerPanel()
+}
+
+const onDocumentClick = (e) => {
+  if (!showStickerPanel.value) return
+  const panel = e.target?.closest?.('.chat-sticker-panel')
+  const toggle = e.target?.closest?.('.chat-sticker-toggle')
+  if (!panel && !toggle) closeStickerPanel()
+}
+
 onMounted(() => {
   restoreScrollPosition()
+  document.addEventListener('click', onDocumentClick)
 })
 
 onUnmounted(() => {
@@ -319,6 +442,7 @@ onUnmounted(() => {
     scrollSaveTimer = null
   }
   saveScrollPosition()
+  document.removeEventListener('click', onDocumentClick)
 })
 
 const getOldestMessageId = () => (props.messages.length ? props.messages[0].id : '')
@@ -532,14 +656,15 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   background: rgba(57, 197, 187, 0.2);
   border-color: rgba(57, 197, 187, 0.4);
 }
-.chat-message {
+.chat-message-group {
   display: flex;
   gap: 0.55rem;
   align-items: flex-start;
   align-self: flex-start;
   max-width: 92%;
+  margin-top: 0.7rem;
 }
-.chat-message.own {
+.chat-message-group.own {
   align-self: flex-end;
   flex-direction: row-reverse;
 }
@@ -571,14 +696,15 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   object-fit: cover;
   display: block;
 }
+/* 整组合并到同一个气泡容器 */
 .chat-message-bubble {
   min-width: 0;
-  padding: 0.6rem 0.75rem;
+  padding: 0.45rem 0.75rem 0.55rem;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
-.chat-message.own .chat-message-bubble {
+.chat-message-group.own .chat-message-bubble {
   background: rgba(57, 197, 187, 0.18);
   border-color: rgba(57, 197, 187, 0.3);
 }
@@ -586,11 +712,11 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.25rem;
   font-size: 0.72rem;
   color: rgba(255, 255, 255, 0.5);
 }
-.chat-message.own .chat-message-meta { justify-content: flex-end; }
+.chat-message-group.own .chat-message-meta { justify-content: flex-end; }
 .chat-message-name {
   max-width: 160px;
   overflow: hidden;
@@ -599,12 +725,16 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   color: rgba(255, 255, 255, 0.78);
 }
 .chat-message-time { flex-shrink: 0; }
-.chat-message-content {
+.chat-message-item {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
   line-height: 1.5;
   font-size: 0.9rem;
+  padding-top: 0.1rem;
+}
+.chat-message-item + .chat-message-item {
+  margin-top: 0.18rem;
 }
 .chat-jump-to-bottom {
   position: absolute;
@@ -638,25 +768,130 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   border: 1px solid rgba(244, 67, 54, 0.28);
 }
 .chat-form { display: flex; gap: 0.6rem; align-items: center; }
-.chat-input {
+.chat-input-wrapper {
+  position: relative;
   flex: 1;
   min-width: 0;
-  padding: 0.65rem 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.4rem 0 0.65rem;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
-  color: white;
-  font-size: 0.9rem;
   transition: all 0.3s ease;
 }
-.chat-input:focus {
-  outline: none;
+.chat-input-wrapper:focus-within {
   border-color: rgba(57, 197, 187, 0.55);
   background: rgba(255, 255, 255, 0.12);
   box-shadow: 0 0 0 3px rgba(57, 197, 187, 0.08);
 }
+.chat-sticker-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.65);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.chat-sticker-toggle:hover:not(:disabled) {
+  color: white;
+  background: rgba(57, 197, 187, 0.18);
+}
+.chat-sticker-toggle.active {
+  color: #39c5bb;
+  background: rgba(57, 197, 187, 0.2);
+}
+.chat-sticker-toggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.chat-sticker-panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 10px;
+  background: rgba(18, 20, 26, 0.96);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+  max-width: 280px;
+}
+.chat-sticker-item {
+  width: 48px;
+  height: 48px;
+  padding: 4px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-sticker-item:hover {
+  background: rgba(57, 197, 187, 0.18);
+  border-color: rgba(57, 197, 187, 0.4);
+  transform: scale(1.08);
+}
+.chat-sticker-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.sticker-pop-enter-active, .sticker-pop-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.sticker-pop-enter-from, .sticker-pop-leave-to {
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+}
+.chat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.65rem 0;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 0.9rem;
+  transition: none;
+}
+.chat-input:focus { outline: none; }
 .chat-input::placeholder { color: rgba(255, 255, 255, 0.4); }
 .chat-input:disabled { opacity: 0.55; cursor: not-allowed; }
+.chat-sticker {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.chat-sticker-message {
+  max-width: 120px;
+  max-height: 120px;
+  border-radius: 6px;
+  display: block;
+  object-fit: contain;
+  margin: 2px 0;
+}
+@media (max-width: 480px) {
+  .chat-sticker-panel { grid-template-columns: repeat(5, 1fr); max-width: 240px; }
+  .chat-sticker-item { width: 40px; height: 40px; }
+}
 .action-btn {
   padding: 0.4rem 0.8rem;
   border-radius: 6px;

@@ -30,7 +30,16 @@ const getRoomIdFromUrl = (url) => normalizeRoomId(url.searchParams.get('roomId')
 
 const sanitizeUsername = (value) => String(value || '').trim().slice(0, MAX_USERNAME_LENGTH)
 
-const sanitizeContent = (value) => String(value || '').trim().slice(0, MAX_MESSAGE_LENGTH)
+const STICKER_MESSAGE_PATTERN = /^\[sticker:(?:[1-9]|10)\]$/
+const isStickerMessage = (value) => STICKER_MESSAGE_PATTERN.test(String(value || ''))
+
+const sanitizeContent = (value) => {
+  const str = String(value || '').trim().slice(0, MAX_MESSAGE_LENGTH)
+  if (str.startsWith('[sticker:')) {
+    return isStickerMessage(str) ? str : ''
+  }
+  return str
+}
 
 const parsePositiveInt = (value, fallback) => {
   const n = Number.parseInt(value, 10)
