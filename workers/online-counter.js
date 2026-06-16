@@ -8,6 +8,29 @@ const HISTORY_PAGE_LIMIT = 100
 const CHAT_THROTTLE_MS = 1500
 const HISTORY_THROTTLE_MS = 400
 
+const LOCATION_WHITELIST = new Set([
+  '北京', '天津', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江',
+  '上海', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南',
+  '湖北', '湖南', '广东', '广西', '海南', '重庆', '四川', '贵州',
+  '云南', '陕西', '甘肃', '青海', '宁夏', '新疆', '西藏',
+  '中国台湾', '中国香港', '中国澳门', '中国',
+  '美国', '日本', '韩国', '英国', '德国', '法国', '澳大利亚', '加拿大',
+  '新加坡', '马来西亚', '泰国', '越南', '菲律宾', '印尼', '印度', '俄罗斯',
+  '巴西', '墨西哥', '意大利', '西班牙', '荷兰', '瑞典', '瑞士', '新西兰',
+  '阿联酋', '沙特', '南非', '埃及', '土耳其', '波兰', '乌克兰', '以色列',
+  '阿根廷', '哥伦比亚', '秘鲁', '智利', '捷克', '罗马尼亚', '匈牙利',
+  '希腊', '葡萄牙', '挪威', '芬兰', '丹麦', '爱尔兰', '奥地利', '比利时',
+  '哈萨克斯坦', '巴基斯坦', '孟加拉', '缅甸', '柬埔寨', '老挝', '尼泊尔',
+  '蒙古', '伊朗', '伊拉克', '格鲁吉亚', '阿塞拜疆',
+])
+
+const sanitizeLocation = (value) => {
+  const str = String(value || '').trim()
+  if (!str) return ''
+  if (LOCATION_WHITELIST.has(str)) return str
+  return '黑客-艾鲁迪克'
+}
+
 const getDefaultSessionMeta = () => ({
   roomId: DEFAULT_ROOM_ID,
   userId: '',
@@ -381,7 +404,7 @@ export class OnlineCounter {
     }
 
     const username = meta.username || sanitizeUsername(data.username) || '游客'
-    const location = String(data.location || '').trim().slice(0, MAX_LOCATION_LENGTH)
+    const location = sanitizeLocation(data.location)
     const chatMessage = {
       id: crypto.randomUUID(),
       roomId: meta.roomId,
