@@ -44,34 +44,46 @@ const COUNTRIES = {
   HK: '中国香港', MO: '中国澳门',
 }
 
+const normalizeCnRegion = (rn) => {
+  const r = rn.trim()
+  if (CN_REGIONS[r]) return CN_REGIONS[r]
+  if (CN_REGION_CODES[r.toUpperCase()]) return CN_REGION_CODES[r.toUpperCase()]
+  if (/[\u4e00-\u9fa5]/.test(r)) {
+    const stripped = r
+      .replace(/(壮族|回族|维吾尔)?自治区$/, '')
+      .replace(/特别行政区$/, '')
+      .replace(/省$|市$|自治区$|地区$/g, '')
+    if (CN_REGIONS[stripped]) return CN_REGIONS[stripped]
+    if (stripped && stripped !== r) return stripped
+    return r
+  }
+  const upper = r.toUpperCase()
+  if (CN_REGION_CODES[upper]) return CN_REGION_CODES[upper]
+  return null
+}
+
 const resolveLocation = (countryCode, regionName, countryName) => {
   if (!countryCode) return null
   const cc = String(countryCode).toUpperCase()
   if (cc === 'HK' || cc === 'MO') {
     if (regionName) {
-      const rn = String(regionName).trim()
-      if (CN_REGIONS[rn]) return CN_REGIONS[rn]
-      if (/[\u4e00-\u9fa5]/.test(rn)) return rn
+      const normalized = normalizeCnRegion(String(regionName))
+      if (normalized) return normalized
     }
     return COUNTRIES[cc] || countryName || cc
   }
   if (cc === 'TW') {
     if (regionName) {
-      const rn = String(regionName).trim()
-      if (CN_REGIONS[rn]) return CN_REGIONS[rn]
-      if (/[\u4e00-\u9fa5]/.test(rn)) return rn
+      const normalized = normalizeCnRegion(String(regionName))
+      if (normalized) return normalized
     }
     return '中国台湾'
   }
 
   if (cc === 'CN') {
     if (regionName) {
-      const rn = String(regionName).trim()
-      if (!rn) return '中国'
-      if (CN_REGIONS[rn]) return CN_REGIONS[rn]
-      if (CN_REGION_CODES[rn.toUpperCase()]) return CN_REGION_CODES[rn.toUpperCase()]
-      if (/[\u4e00-\u9fa5]/.test(rn)) return rn
-      return rn
+      const normalized = normalizeCnRegion(String(regionName))
+      if (normalized) return normalized
     }
     return '中国'
   }
