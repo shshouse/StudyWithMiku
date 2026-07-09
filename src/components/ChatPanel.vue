@@ -358,11 +358,18 @@ const getLastVisibleMessageId = () => {
   return lastId
 }
 
-const updateUnreadFromViewport = () => {
+const updateLastSeenFromViewport = () => {
   const lastId = getLastVisibleMessageId()
   if (lastId) {
     lastSeenMessageId.value = lastId
     try { localStorage.setItem(SEEN_MESSAGE_KEY, lastId) } catch {}
+  }
+}
+
+const recomputeUnreadFromLastSeen = () => {
+  if (autoScrollPending.value) {
+    unreadCount.value = 0
+    return
   }
   const msgs = props.messages
   if (!msgs.length) {
@@ -380,7 +387,8 @@ const handleScroll = () => {
   const currentScrollTop = el.scrollTop
   const atBottom = isAtBottom()
   autoScrollPending.value = atBottom
-  updateUnreadFromViewport()
+  if (atBottom) unreadCount.value = 0
+  updateLastSeenFromViewport()
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer)
   scrollSaveTimer = setTimeout(saveScrollPosition, SCROLL_SAVE_DEBOUNCE)
   if (
@@ -414,7 +422,7 @@ const restoreScrollPosition = async () => {
         const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight)
         el.scrollTop = Math.min(Math.max(0, saved.scrollTop), maxScroll)
         autoScrollPending.value = isAtBottom()
-        updateUnreadFromViewport()
+        recomputeUnreadFromLastSeen()
         isReady.value = true
         return
       }
@@ -425,7 +433,7 @@ const restoreScrollPosition = async () => {
     if (targetEl) {
       targetEl.scrollIntoView({ block: 'center' })
       autoScrollPending.value = false
-      updateUnreadFromViewport()
+      recomputeUnreadFromLastSeen()
       isReady.value = true
       return
     }
@@ -552,7 +560,7 @@ watch(
         try { localStorage.setItem(SEEN_MESSAGE_KEY, lastSeenMessageId.value) } catch {}
         unreadCount.value = 0
       } else if (newLen > oldLen && !olderPrepended) {
-        updateUnreadFromViewport()
+        unreadCount.value += (newLen - oldLen)
       }
       lastOldestId = newOldestId
     })
