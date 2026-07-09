@@ -17,59 +17,65 @@ const buildPlaylistUrl = (apiBase, server, id, bitrate) => {
   return url
 }
 
-const normalizeSongs = (data, id) => data.map(song => {
-  const originalName = song.title || song.name
+const extractUrlParts = (url) => {
+  try {
+    const u = new URL(url)
+    return {
+      id: u.searchParams.get('id'),
+      server: u.searchParams.get('server') || 'netease'
+    }
+  } catch {
+    return null
+  }
+}
+
+const buildPrimaryUrl = (fallbackUrl) => {
+  const parts = extractUrlParts(fallbackUrl)
+  if (!parts?.id) return fallbackUrl
+  return `${METING_API}?server=${parts.server}&type=url&id=${parts.id}`
+}
+
+const mapSongName = (originalName, id) => {
   const cleanName = originalName.replace(/\s*-\s*STUDY WITH MIKU ver.\s*-\s*$/, '')
-  const name = id === DEFAULT_PLAYLIST_ID && songNameMap[cleanName] ? songNameMap[cleanName] : originalName
+  return id === DEFAULT_PLAYLIST_ID && songNameMap[cleanName] ? songNameMap[cleanName] : originalName
+}
+
+const normalizeSongs = (data, id, useFallbackUrl = false) => data.map(song => {
+  const originalName = song.title || song.name
+  const fallbackUrl = song.url
   return {
-    name,
+    name: mapSongName(originalName, id),
     artist: song.author || song.artist,
-    url: song.url,
+    url: useFallbackUrl ? fallbackUrl : buildPrimaryUrl(fallbackUrl),
+    _fallbackUrl: useFallbackUrl ? null : fallbackUrl,
     cover: song.pic || song.cover,
     lrc: song.lrc
   }
 })
 
-const tryFetch = async (apiBase, server, id, bitrate) => {
-  try {
-    const response = await fetch(buildPlaylistUrl(apiBase, server, id, bitrate))
-    if (!response.ok) return null
-    const data = await response.json()
-    if (!Array.isArray(data) || data.length === 0) return null
-    return normalizeSongs(data, id)
-  } catch (error) {
-    console.error(`Meting API(${apiBase})错误:`, error)
-    return null
-  }
-}
-
-const probeFirstSong = async (songs, timeoutMs = 3000) => {
-  if (!songs || !songs.length) return false
-  try {
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs)
-    const res = await fetch(songs[0].url, { signal: ctrl.signal })
-    clearTimeout(timer)
-    ctrl.abort()
-    if (!res.ok) return false
-    const ct = res.headers.get('content-type') || ''
-    return !ct.includes('text/html')
-  } catch {
-    return false
-  }
-}
-
 export const fetchPlaylist = async (server = 'netease', id = DEFAULT_PLAYLIST_ID, bitrate = DEFAULT_BITRATE) => {
-  const primary = await tryFetch(METING_API, server, id, bitrate)
-  if (primary && await probeFirstSong(primary)) return primary
-
-  if (METING_API_FALLBACK && METING_API_FALLBACK !== METING_API) {
-    console.warn('回退中┭┮﹏┭┮', METING_API_FALLBACK)
-    const fallback = await tryFetch(METING_API_FALLBACK, server, id, bitrate)
-    if (fallback && await probeFirstSong(fallback)) return fallback
-    if (fallback) return fallback
+  if (METING_API_FALLBACK) {
+    try {
+      const response = await fetch(buildPlaylistUrl(METING_API_FALLBACK, server, id, bitrate))
+      if (response.ok) {
+        const data = await response.json()
+        if (Array.isArray(data) && data.length > 0) return normalizeSongs(data, id)
+      }
+    } catch (error) {
+      console.error(`备用API错误:`, error)
+    }
   }
-  return primary || []
+
+  try {
+    const response = await fetch(buildPlaylistUrl(METING_API, server, id, bitrate))
+    if (!response.ok) return []
+    const data = await response.json()
+    if (!Array.isArray(data) || data.length === 0) return []
+    return normalizeSongs(data, id, true)
+  } catch (error) {
+    console.error(`Meting 主 API错误:`, error)
+    return []
+  }
 }
 
 export const getStoredConfig = () => {

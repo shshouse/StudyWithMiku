@@ -35,6 +35,10 @@
     
     <!-- APlayer 播放器 -->
     <div id="aplayer" class="aplayer-container"></div>
+
+    <transition name="fade">
+      <div v-if="audioErrorToast" class="audio-error-toast">{{ audioErrorToast }}</div>
+    </transition>
   </div>
 </template>
 
@@ -162,6 +166,14 @@ const aplayer = ref(null)
 const aplayerInitialized = ref(false)
 const { songs, loadSongs, loading } = useMusic()
 const { setupCrossfade, cleanup: cleanupCrossfade } = useCrossfade()
+
+const audioErrorToast = ref('')
+let audioErrorToastTimer = null
+const showAudioErrorToast = (text) => {
+  audioErrorToast.value = text
+  if (audioErrorToastTimer) clearTimeout(audioErrorToastTimer)
+  audioErrorToastTimer = setTimeout(() => { audioErrorToast.value = '' }, 4000)
+}
 
 const getCurrentAudio = () => {
   const ap = aplayer.value
@@ -327,8 +339,10 @@ onMounted(() => {
     }
     
     try {
-      await loadStyle('./APlayer.min.css')
-      await loadScript('./APlayer.min.js')
+      await Promise.all([
+        loadStyle('./APlayer.min.css'),
+        loadScript('./APlayer.min.js')
+      ])
       await initAPlayer()
     } catch (error) {
       console.error('加载 APlayer 资源失败:', error)
@@ -336,8 +350,6 @@ onMounted(() => {
   }
   
   const initAPlayer = async () => {
-    await loadSongs()
-    
     const savedMusicIndex = getMusicIndex()
     const savedSettings = getAPlayerSettings()
     
@@ -345,7 +357,7 @@ onMounted(() => {
       container: document.getElementById('aplayer'),
       fixed: true,
       autoplay: true,
-      audio: songs.value,
+      audio: [],
       lrcType: 3,
       theme: '#2980b9',
       loop: savedSettings.loop,
@@ -357,14 +369,31 @@ onMounted(() => {
       listMaxHeight: '200px',
       width: '300px'
     })
-    
-    if (savedMusicIndex > 0 && savedMusicIndex < songs.value.length) {
-      aplayer.value.list.switch(savedMusicIndex)
-    }
-    
+
     aplayer.value.on('listswitch', (e) => {
       saveMusicIndex(e.index)
       syncMediaSession(true)
+    })
+    aplayer.value.on('error', () => {
+      const ap = aplayer.value
+      if (!ap) return
+      const index = ap.list?.index ?? 0
+      const current = ap.list?.audios?.[index]
+      if (!current) return
+      if (!current._fallbackUsed && current._fallbackUrl) {
+        current._fallbackUsed = true
+        current.url = current._fallbackUrl
+        showAudioErrorToast('主音源加载失败，切换备用中…')
+        ap.list.switch(index)
+      } else {
+        showAudioErrorToast('当前歌曲加载失败，正在尝试下一首…')
+      }
+    })
+    aplayer.value.on('noticeshow', () => {
+      const noticeEl = document.querySelector('#aplayer .aplayer-notice')
+      if (noticeEl && (noticeEl.textContent || '').includes('audio error')) {
+        noticeEl.textContent = '音频加载失败…'
+      }
     })
     aplayer.value.on('play', () => {
       syncMediaSession(true)
@@ -407,11 +436,10 @@ onMounted(() => {
       }, 50)
     }
     
-    // 设置播放器样式
+    // 设置播放器样式（opacity 等 loadSongs 完成后再显示，避免空壳）
     const playerElement = document.getElementById('aplayer')
     if (playerElement) {
       playerElement.style.transition = 'opacity 0.3s ease'
-      playerElement.style.opacity = '1'
       playerElement.style.pointerEvents = 'auto'
       playerElement.addEventListener('mouseenter', onUIMouseEnter)
       playerElement.addEventListener('mouseleave', onUIMouseLeave)
@@ -429,6 +457,19 @@ onMounted(() => {
     setAPlayerInstance(aplayer.value)
     setupCrossfade(aplayer.value, () => syncMediaSession(true))
     syncMediaSession(true)
+
+    loadSongs().then(() => {
+      if (!aplayer.value) return
+      if (songs.value.length > 0) {
+        aplayer.value.list.add(songs.value)
+        if (savedMusicIndex > 0 && savedMusicIndex < songs.value.length) {
+          aplayer.value.list.switch(savedMusicIndex)
+        }
+        syncMediaSession(true)
+      }
+      // 歌单加载完成（含失败/空）后再显示 APlayer，避免空壳
+      if (playerElement) playerElement.style.opacity = '1'
+    })
 
     if (!savedSettings.lrcShow) {
       const lrcButton = document.querySelector('.aplayer-icon-lrc')
@@ -481,9 +522,7 @@ onMounted(() => {
   }
   document.addEventListener('visibilitychange', handleMediaSessionVisibilityChange)
   preloadAllVideos()
-  setTimeout(() => {
-    loadAPlayer()
-  }, 500)
+  loadAPlayer()
 })
 
 onUnmounted(() => {
@@ -600,6 +639,32 @@ onUnmounted(() => {
 
 .aplayer-container {
   transition: opacity 0.3s ease;
+  opacity: 0;
+}
+
+.audio-error-toast {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 14px;
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 .aplayer-container.hidden {
