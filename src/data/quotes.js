@@ -39,6 +39,7 @@ export const quotesList = [
   { text: '清蒙远眺云归处,淅雨入眼钟不闻', source: 'Embers' },//by Embers
   { text: '漆夜流动着月,穿过胸膛,衔去了褐,带来了污垢与清冷', source: 'Embers' },//by Embers
   { text: '纯黑的背景里,燃着火焰.在无尽中,逝成着余温', source: 'Embers' },//by Embers
+  { text: '把希望寄托在自己其他可能性这种不靠谱的东西上才是万恶之源，你必须要承认，除了现在在这里的你以外，你无法成为其他任何人。', source: '四叠半神话大系' },//by Mr.沈
 
   { text: '与其临渊羡鱼，不如退而结网', source: '《汉书》' },
   { text: '学习是唯一一件，投入越多回报越确定的事情', source: '' },
