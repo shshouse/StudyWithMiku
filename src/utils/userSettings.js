@@ -7,6 +7,8 @@ const defaultSettings = {
     pauseMusicDuringBreak: true,
     hidePomodoroOnIdle: false,
     showHitokoto: true,
+    pomodoroCount: 4,
+    timerMode: 'pomodoro',
   },
   video: {
     currentIndex: 0
@@ -40,7 +42,7 @@ export const saveSettings = (settings) => {
 
 export const savePomodoroSettings = (focusDuration, breakDuration, pauseMusicDuringBreak, hidePomodoroOnIdle, showHitokoto) => {
   const settings = getSettings()
-  settings.pomodoro = { focusDuration, breakDuration, pauseMusicDuringBreak, hidePomodoroOnIdle, showHitokoto }
+  settings.pomodoro = { ...settings.pomodoro, focusDuration, breakDuration, pauseMusicDuringBreak, hidePomodoroOnIdle, showHitokoto }
   saveSettings(settings)
 }
 
@@ -57,6 +59,13 @@ export const saveMusicPauseSettings = (pauseMusicDuringBreak, hidePomodoroOnIdle
   settings.pomodoro.pauseMusicDuringBreak = pauseMusicDuringBreak
   settings.pomodoro.hidePomodoroOnIdle = hidePomodoroOnIdle
   settings.pomodoro.showHitokoto = showHitokoto
+  saveSettings(settings)
+}
+
+export const saveTimerSettings = (timerMode, pomodoroCount) => {
+  const settings = getSettings()
+  settings.pomodoro.timerMode = timerMode
+  settings.pomodoro.pomodoroCount = pomodoroCount
   saveSettings(settings)
 }
 

@@ -62,6 +62,20 @@ export const localSongsData = {
       url: '/SpecialMusic/medicine - Snail House.mp3',
       cover: '/SpecialMusic/medicine - Snail House.cover.jpg',
       lrc: ''
+    },
+    {
+      name: '雪の日 (snowy day)',
+      artist: "Snail's House",
+      url: '/SpecialMusic/06 - 雪の日 (snowy day).mp3',
+      cover: '/SpecialMusic/06 - 雪の日 (snowy day).cover.png',
+      lrc: ''
+    },
+    {
+      name: 'あなたと (with you)',
+      artist: "Snail's House",
+      url: '/SpecialMusic/13 - あなたと (with you).mp3',
+      cover: '/SpecialMusic/13 - あなたと (with you).cover.png',
+      lrc: ''
     }
   ]
 }

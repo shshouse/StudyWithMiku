@@ -10,7 +10,7 @@
         @touchstart="onUITouchStart"
         @touchend="onUITouchEnd"
       >
-        <span v-if="hasNewUpdate || hasNewPlaylist || !qqGroupSeen" class="clock-update-dot"></span>
+        <span v-if="hasNewUpdate || hasNewPlaylist" class="clock-update-dot"></span>
         <div class="clock-row">
           <div class="online-indicator">
             <span class="online-dot" :class="{ connected: isConnected }"></span>
@@ -22,7 +22,7 @@
             <span class="separator">:</span>
             <span class="seconds">{{ formattedSeconds }}</span>
           </div>
-          <div class="status-badge" :class="statusClass">{{ statusText }}</div>
+          <div v-if="statusText" class="status-badge" :class="statusClass">{{ statusText }}</div>
           <div class="system-time">{{ systemTime }}</div>
         </div>
         <transition name="slide-fade">
@@ -32,12 +32,6 @@
           </div>
         </transition>
       </div>
-      <transition name="slide-fade">
-        <div v-if="!qqGroupSeen" class="qq-tooltip" @click.stop="dismissQQTooltip">
-          <div class="qq-tooltip-arrow"></div>
-          <span>欢迎加入聊天QQ群＞﹏＜</span>
-        </div>
-      </transition>
       <transition name="fade">
         <div v-if="showHitokoto && showHitokotoAnimation" :key="currentHitokoto.text" class="hitokoto-container">
           {{ currentHitokoto.text }}
@@ -75,8 +69,8 @@
               <button class="nav-item" :class="{ active: currentTab === 'updates' }" @click="openUpdatesTab">
                 <History :size="16" class="nav-icon" />更新日志<span v-if="hasNewUpdate" class="update-dot"></span>
               </button>
-              <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="openAboutTab">
-                <Info :size="16" class="nav-icon" />关于<span v-if="!qqGroupSeen" class="update-dot"></span>
+              <button class="nav-item" :class="{ active: currentTab === 'about' }" @click="currentTab = 'about'">
+                <Info :size="16" class="nav-icon" />关于
               </button>
             </div>
             <div class="settings-content">
@@ -109,43 +103,63 @@
                 </div>
 
                 <div v-else-if="currentTab === 'pomodoro'" key="pomodoro" class="timer-container">
-                <div class="status-indicator">
-                  <span class="status-text" :class="statusClass">{{ statusText }}</span>
+                <div class="mode-switcher">
+                  <div class="mode-indicator" :class="timerMode"></div>
+                  <button class="mode-btn" :class="{ active: timerMode === 'pomodoro' }" @click="switchMode('pomodoro')">番茄钟</button>
+                  <button class="mode-btn" :class="{ active: timerMode === 'stopwatch' }" @click="switchMode('stopwatch')">计时器</button>
                 </div>
-                <div class="timer-display">
-                  <div class="time-circle">
-                    <svg class="progress-ring" width="120" height="120">
-                      <circle class="progress-ring-background" cx="60" cy="60" r="54" stroke="rgba(255, 255, 255, 0.2)" stroke-width="5" fill="transparent"/>
-                      <circle class="progress-ring-fill" :class="statusClass" cx="60" cy="60" r="54" stroke="currentColor" stroke-width="5" fill="transparent" :stroke-dasharray="circumference" :stroke-dashoffset="strokeDashoffset" transform="rotate(-90 60 60)"/>
-                    </svg>
-                    <div class="time-text">
-                      <span class="minutes">{{ formattedMinutes }}</span>
-                      <span class="separator">:</span>
-                      <span class="seconds">{{ formattedSeconds }}</span>
+                <div class="timer-main-row">
+                  <div class="timer-clock-side">
+                    <div class="time-circle">
+                      <svg class="progress-ring" viewBox="0 0 120 120">
+                        <circle class="progress-ring-background" cx="60" cy="60" r="54" stroke="rgba(255, 255, 255, 0.2)" stroke-width="5" fill="transparent"/>
+                        <circle v-if="timerMode === 'pomodoro'" class="progress-ring-fill" :class="statusClass" cx="60" cy="60" r="54" stroke="currentColor" stroke-width="5" fill="transparent" :stroke-dasharray="circumference" :stroke-dashoffset="strokeDashoffset" transform="rotate(-90 60 60)"/>
+                      </svg>
+                      <transition name="time-pop">
+                        <div class="time-text" :key="timerMode">
+                          <span class="minutes">{{ formattedMinutes }}</span>
+                          <span class="separator">:</span>
+                          <span class="seconds">{{ formattedSeconds }}</span>
+                        </div>
+                      </transition>
+                    </div>
+                  </div>
+                  <div class="timer-info-side">
+                    <div class="status-slot">
+                      <transition name="status-fade">
+                        <div v-if="statusText" :key="statusText" class="status-badge-lg" :class="statusClass">{{ statusText }}</div>
+                      </transition>
+                    </div>
+                    <div class="timer-controls">
+                      <button v-if="!isRunning" class="control-btn start-btn" @click="startTimer" :disabled="timerMode === 'pomodoro' && timeLeft <= 0"><span class="btn-icon">▶</span></button>
+                      <button v-else class="control-btn pause-btn" @click="pauseTimer"><span class="btn-icon">⏸</span></button>
+                      <button class="control-btn reset-btn" @click="resetTimer"><span class="btn-icon">↺</span></button>
                     </div>
                   </div>
                 </div>
-                <div class="timer-controls">
-                  <button v-if="!isRunning" class="control-btn start-btn" @click="startTimer" :disabled="timeLeft <= 0"><span class="btn-icon">▶</span></button>
-                  <button v-else class="control-btn pause-btn" @click="pauseTimer"><span class="btn-icon">⏸</span></button>
-                  <button class="control-btn reset-btn" @click="resetTimer"><span class="btn-icon">↺</span></button>
-                </div>
-                <div class="timer-settings">
-                  <div class="setting-group">
-                    <label>专注时间(分钟)</label>
-                    <input type="number" v-model.number="focusDuration" min="1" max="60" :disabled="isRunning"/>
-                  </div>
-                  <div class="setting-group">
-                    <label>休息时间(分钟)</label>
-                    <input type="number" v-model.number="breakDuration" min="1" max="30" :disabled="isRunning"/>
-                  </div>
-                  <div class="pomodoro-count">
-                    <span class="count-label">已完成番茄:</span>
-                    <div class="count-display">
-                      <span v-for="i in 4" :key="i" class="pomodoro-dot" :class="{ filled: completedPomodoros >= i }"></span>
+                <transition name="settings-slide">
+                  <div v-if="timerMode === 'pomodoro'" key="pomodoro-settings" class="timer-settings">
+                    <div class="setting-group">
+                      <label>专注时间(分钟)</label>
+                      <input type="number" v-model.number="focusDuration" min="1" max="60" :disabled="isRunning"/>
+                    </div>
+                    <div class="setting-group">
+                      <label>休息时间(分钟)</label>
+                      <input type="number" v-model.number="breakDuration" min="1" max="30" :disabled="isRunning"/>
+                    </div>
+                    <div class="setting-group">
+                      <label>番茄个数</label>
+                      <input type="number" v-model.number="pomodoroCount" min="1" max="8" :disabled="isRunning"/>
+                    </div>
+                    <div class="pomodoro-count">
+                      <span class="count-label">已完成番茄:</span>
+                      <div class="count-display">
+                        <span v-for="i in pomodoroCount" :key="i" class="pomodoro-dot" :class="{ filled: completedPomodoros % pomodoroCount >= i }"></span>
+                      </div>
                     </div>
                   </div>
-                  <div class="toggle-grid">
+                </transition>
+                <div class="toggle-grid">
                     <div class="toggle-item">
                       <label>休息时暂停音乐</label>
                       <label class="toggle-switch">
@@ -176,7 +190,6 @@
                     </div>
                   </div>
                 </div>
-              </div>
 
               <div v-else-if="currentTab === 'playlist'" class="playlist-container">
                 <div class="setting-group setting-group-row">
@@ -309,7 +322,6 @@
                   <p>2.项目代码在github开源，欢迎点上star！</p>
                   <p>3.项目部署域名：study.mikumod.com</p>
                   <p>4.希望你可以喜欢！在悠闲的音乐里和初音一起学习吧~</p>
-                  <p>5.QQ交流反馈群＞﹏＜：<span class="qq-group-number" @click="copyQQGroup">{{ QQ_GROUP }}</span>（点击复制）</p>
                 </div>
                 <div class="runtime-display">
                   <div class="runtime-label">网站已运行</div>
@@ -407,7 +419,7 @@
   import { useMusic } from '../composables/useMusic.js'
   import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
   import { useCrossfade } from '../composables/useCrossfade.js'
-  import { getPomodoroSettings, getDefaultPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings } from '../utils/userSettings.js'
+  import { getPomodoroSettings, getDefaultPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings, saveTimerSettings } from '../utils/userSettings.js'
   import { recommendPlaylists, LATEST_PLAYLIST_VERSION } from '../data/playlists.js'
   import { LATEST_UPDATE_VERSION } from '../data/updates.js'
   import { getRandomQuote } from '../data/quotes.js'
@@ -422,11 +434,8 @@
 
 const UPDATE_READ_KEY = 'last_read_update'
 const PLAYLIST_READ_KEY = 'last_read_playlist'
-const QQ_GROUP_SEEN_KEY = 'qq_group_seen'
-const QQ_GROUP = '941108668'
 const hasNewUpdate = ref(localStorage.getItem(UPDATE_READ_KEY) !== LATEST_UPDATE_VERSION)
 const hasNewPlaylist = ref(localStorage.getItem(PLAYLIST_READ_KEY) !== LATEST_PLAYLIST_VERSION)
-const qqGroupSeen = ref(!!localStorage.getItem(QQ_GROUP_SEEN_KEY))
 const openUpdatesTab = () => {
   currentTab.value = 'updates'
   hasNewUpdate.value = false
@@ -436,22 +445,6 @@ const openPlaylistTab = () => {
   currentTab.value = 'playlist'
   hasNewPlaylist.value = false
   localStorage.setItem(PLAYLIST_READ_KEY, LATEST_PLAYLIST_VERSION)
-}
-const openAboutTab = () => {
-  currentTab.value = 'about'
-  if (!qqGroupSeen.value) {
-    qqGroupSeen.value = true
-    localStorage.setItem(QQ_GROUP_SEEN_KEY, '1')
-  }
-}
-const copyQQGroup = () => {
-  navigator.clipboard.writeText(QQ_GROUP).then(() => {
-    alert('QQ群号已复制: ' + QQ_GROUP)
-  })
-}
-const dismissQQTooltip = () => {
-  qqGroupSeen.value = true
-  localStorage.setItem(QQ_GROUP_SEEN_KEY, '1')
 }
 
 const props = defineProps({
@@ -534,6 +527,8 @@ const applyRemoteData = (remote) => {
     pauseMusicDuringBreak.value = settings.pauseMusicDuringBreak
     hidePomodoroOnIdle.value = settings.hidePomodoroOnIdle
     showHitokoto.value = settings.showHitokoto
+    timerMode.value = settings.timerMode || 'pomodoro'
+    pomodoroCount.value = settings.pomodoroCount || 4
   }
   markLocalStudyOwner()
 }
@@ -545,6 +540,8 @@ const resetPomodoroSettings = () => {
   pauseMusicDuringBreak.value = defaults.pauseMusicDuringBreak
   hidePomodoroOnIdle.value = defaults.hidePomodoroOnIdle
   showHitokoto.value = defaults.showHitokoto
+  timerMode.value = defaults.timerMode
+  pomodoroCount.value = defaults.pomodoroCount
 }
 
 const inputPlaylistId = ref('')
@@ -729,6 +726,10 @@ const breakDuration = ref(savedPomodoro.breakDuration)
 const pauseMusicDuringBreak = ref(savedPomodoro.pauseMusicDuringBreak ?? false)
 const hidePomodoroOnIdle = ref(savedPomodoro.hidePomodoroOnIdle || false)
 const showHitokoto = ref(savedPomodoro.showHitokoto || false)
+const timerMode = ref(savedPomodoro.timerMode || 'pomodoro')
+const pomodoroCount = ref(savedPomodoro.pomodoroCount || 4)
+const stopwatchElapsed = ref(0)
+let stopwatchBase = 0
 const timeLeft = ref(focusDuration.value * 60)
 const isRunning = ref(false)
 const currentStatus = ref(STATUS.FOCUS)
@@ -802,7 +803,11 @@ const moveToNextPhase = (completedStatus, completedAt) => {
   if (completedStatus === STATUS.FOCUS) {
     completedPomodoros.value++
     addPomodoro()
-    currentStatus.value = completedPomodoros.value % 4 === 0 ? STATUS.LONG_BREAK : STATUS.BREAK
+    if (completedPomodoros.value % pomodoroCount.value === 0) {
+      currentStatus.value = STATUS.LONG_BREAK
+    } else {
+      currentStatus.value = STATUS.BREAK
+    }
   } else {
     currentStatus.value = STATUS.FOCUS
   }
@@ -831,6 +836,7 @@ watch(showHitokoto, () => {
     showHitokotoAnimation.value = true
   }
 })
+watch(pomodoroCount, () => { saveTimerSettings(timerMode.value, pomodoroCount.value); triggerSync() })
 
 const rotateHitokoto = () => {
   showHitokotoAnimation.value = false
@@ -840,18 +846,38 @@ const rotateHitokoto = () => {
   }, 300)
 }
 
-const formattedMinutes = computed(() => Math.floor(timeLeft.value / 60).toString().padStart(2, '0'))
-const formattedSeconds = computed(() => (timeLeft.value % 60).toString().padStart(2, '0'))
-const statusText = computed(() => ({ [STATUS.FOCUS]: '专注', [STATUS.BREAK]: '休息', [STATUS.LONG_BREAK]: '长休' }[currentStatus.value] || '专注'))
-const statusClass = computed(() => ({ [STATUS.FOCUS]: 'focus', [STATUS.BREAK]: 'break', [STATUS.LONG_BREAK]: 'long-break' }[currentStatus.value] || 'focus'))
+const formattedMinutes = computed(() => {
+  const total = timerMode.value === 'stopwatch' ? stopwatchElapsed.value : timeLeft.value
+  return Math.floor(total / 60).toString().padStart(2, '0')
+})
+const formattedSeconds = computed(() => {
+  const total = timerMode.value === 'stopwatch' ? stopwatchElapsed.value : timeLeft.value
+  return (total % 60).toString().padStart(2, '0')
+})
+const statusText = computed(() => {
+  if (timerMode.value === 'stopwatch') return isRunning.value ? '计时中' : ''
+  return { [STATUS.FOCUS]: '专注', [STATUS.BREAK]: '休息', [STATUS.LONG_BREAK]: '长休' }[currentStatus.value] || '专注'
+})
+const statusClass = computed(() => {
+  if (timerMode.value === 'stopwatch') return 'stopwatch'
+  return { [STATUS.FOCUS]: 'focus', [STATUS.BREAK]: 'break', [STATUS.LONG_BREAK]: 'long-break' }[currentStatus.value] || 'focus'
+})
 const circumference = computed(() => 2 * Math.PI * 54)
-const strokeDashoffset = computed(() => { const totalTime = getPhaseDuration(currentStatus.value); return circumference.value * (1 - (totalTime - timeLeft.value) / totalTime) })
+const strokeDashoffset = computed(() => {
+  if (timerMode.value === 'stopwatch') return 0
+  const totalTime = getPhaseDuration(currentStatus.value)
+  return circumference.value * (1 - (totalTime - timeLeft.value) / totalTime)
+})
 const toggleSettings = () => { showSettings.value = !showSettings.value }
 const closeSettings = () => { showSettings.value = false }
 
 const scheduleNextTick = () => {
   clearScheduledTick()
   if (!isRunning.value || !phaseEndTime) return
+  if (timerMode.value === 'stopwatch') {
+    timer = setTimeout(timerUpdate, 1000)
+    return
+  }
   const msRemaining = phaseEndTime - Date.now()
   const delay = msRemaining <= 0 ? 0 : (msRemaining % 1000 || 1000)
   timer = setTimeout(timerUpdate, delay)
@@ -859,6 +885,22 @@ const scheduleNextTick = () => {
 const timerUpdate = () => {
   if (!isRunning.value || !phaseEndTime) return
   clearScheduledTick()
+
+  if (timerMode.value === 'stopwatch') {
+    const now = Date.now()
+    const sessionElapsed = Math.floor((now - phaseEndTime) / 1000)
+    const elapsedTotal = sessionElapsed + stopwatchBase
+    stopwatchElapsed.value = elapsedTotal
+    const delta = elapsedTotal - lastRecordedTimeLeft
+    if (delta > 0) {
+      recordFocusElapsed(delta)
+      flushStudyTimeCounter()
+    }
+    lastRecordedTimeLeft = elapsedTotal
+    scheduleNextTick()
+    return
+  }
+
   const now = Date.now()
   const completedPhases = []
   let guard = 0
@@ -905,6 +947,15 @@ const preloadNotificationAudio = () => {
   } catch (e) {}
 }
 const startTimer = () => {
+  if (timerMode.value === 'stopwatch') {
+    preloadNotificationAudio()
+    stopwatchBase = stopwatchElapsed.value
+    isRunning.value = true
+    lastRecordedTimeLeft = stopwatchElapsed.value
+    phaseEndTime = Date.now()
+    scheduleNextTick()
+    return
+  }
   if (timeLeft.value <= 0) return
   preloadNotificationAudio()
   isRunning.value = true
@@ -914,6 +965,24 @@ const startTimer = () => {
   scheduleNextTick()
 }
 const pauseTimer = () => {
+  if (timerMode.value === 'stopwatch') {
+    isRunning.value = false
+    if (phaseEndTime) {
+      const now = Date.now()
+      const sessionElapsed = Math.floor((now - phaseEndTime) / 1000)
+      const elapsedTotal = sessionElapsed + stopwatchBase
+      stopwatchElapsed.value = elapsedTotal
+      stopwatchBase = elapsedTotal
+      const delta = elapsedTotal - lastRecordedTimeLeft
+      if (delta > 0) {
+        recordFocusElapsed(delta)
+        flushStudyTimeCounter()
+      }
+      phaseEndTime = null
+    }
+    clearScheduledTick()
+    return
+  }
   isRunning.value = false
   if (phaseEndTime) {
     const remaining = Math.max(0, Math.ceil((phaseEndTime - Date.now()) / 1000))
@@ -928,7 +997,34 @@ const pauseTimer = () => {
   }
   clearScheduledTick()
 }
-const resetTimer = () => { pauseTimer(); timeLeft.value = focusDuration.value * 60; lastRecordedTimeLeft = 0; currentStatus.value = STATUS.FOCUS }
+const resetTimer = () => {
+  pauseTimer()
+  if (timerMode.value === 'stopwatch') {
+    stopwatchElapsed.value = 0
+    stopwatchBase = 0
+    lastRecordedTimeLeft = 0
+    return
+  }
+  timeLeft.value = focusDuration.value * 60
+  lastRecordedTimeLeft = 0
+  currentStatus.value = STATUS.FOCUS
+}
+const switchMode = (mode) => {
+  if (isRunning.value) pauseTimer()
+  timerMode.value = mode
+  saveTimerSettings(mode, pomodoroCount.value)
+  triggerSync()
+  if (mode === 'stopwatch') {
+    stopwatchElapsed.value = 0
+    stopwatchBase = 0
+    lastRecordedTimeLeft = 0
+  } else {
+    timeLeft.value = focusDuration.value * 60
+    lastRecordedTimeLeft = 0
+    currentStatus.value = STATUS.FOCUS
+    completedPomodoros.value = 0
+  }
+}
 const playNotificationSound = () => {
   if (!isPageVisible()) {
     try {
@@ -1062,28 +1158,6 @@ const handleVisibilityChange = () => {
   position: absolute; top: -3px; right: -3px; width: 10px; height: 10px;
   background: #ff4444; border-radius: 50%; box-shadow: 0 0 8px rgba(255, 68, 68, 0.7);
 }
-.qq-tooltip {
-  position: relative;
-  background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px);
-  border-radius: 10px; padding: 0.6rem 1.2rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.9); font-size: 0.85rem; cursor: pointer;
-  display: flex; align-items: center; gap: 0.5rem;
-  animation: qq-tooltip-bounce 3s ease-in-out infinite;
-  white-space: nowrap; transition: background 0.3s ease;
-  max-width: calc(100vw - 2rem); box-sizing: border-box;
-}
-.qq-tooltip:hover { background: rgba(255, 255, 255, 0.18); }
-.qq-tooltip-arrow {
-  position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
-  width: 0; height: 0;
-  border-left: 6px solid transparent; border-right: 6px solid transparent;
-  border-bottom: 6px solid rgba(255, 255, 255, 0.2);
-}
-@keyframes qq-tooltip-bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
-}
 .clock-row {
   display: flex; align-items: center; gap: clamp(0.6rem, 2.5vw, 1rem);
 }
@@ -1121,9 +1195,6 @@ const handleVisibilityChange = () => {
   }
   .countdown-clock {
     max-width: calc(100vw - 1rem); padding: 0.75rem 0.9rem;
-  }
-  .qq-tooltip {
-    max-width: calc(100vw - 1rem); padding: 0.55rem 0.9rem; font-size: 0.8rem;
   }
   .clock-row {
     gap: 0.65rem;
@@ -1276,7 +1347,6 @@ const handleVisibilityChange = () => {
     opacity: 0.82;
   }
 
-  .qq-tooltip,
   .hitokoto-container {
     display: none;
   }
@@ -1336,27 +1406,89 @@ const handleVisibilityChange = () => {
 }
 
 .timer-container { text-align: center; color: white; }
-.status-indicator { margin-bottom: 1rem; }
-.status-text { font-size: 1rem; font-weight: 500; padding: 0.4rem 0.8rem; border-radius: 20px; background: rgba(255, 255, 255, 0.1); }
-.status-text.focus { color: #ff6b6b; }
-.status-text.break { color: #4ecdc4; }
-.status-text.long-break { color: #45b7d1; }
-.timer-display { margin-bottom: 1.5rem; }
-.time-circle { position: relative; display: inline-block; }
-.progress-ring { display: block; width: 120px; height: 120px; }
+.mode-switcher { position: relative; display: flex; gap: 0; justify-content: center; margin-bottom: 1rem; max-width: 240px; margin-left: auto; margin-right: auto; background: rgba(0, 0, 0, 0.25); border-radius: 22px; padding: 3px; border: 1px solid rgba(255, 255, 255, 0.1); }
+.mode-indicator { position: absolute; left: 3px; top: 3px; bottom: 3px; width: calc(50% - 6px); box-sizing: border-box; border-radius: 20px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.4); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); z-index: 0; }
+.mode-indicator.stopwatch { transform: translateX(calc(100% + 6px)); }
+.mode-btn { position: relative; z-index: 1; flex: 1; padding: 0.4rem 1.2rem; border-radius: 20px; border: none; background: transparent; color: rgba(255, 255, 255, 0.5); font-size: 0.85rem; cursor: pointer; transition: color 0.3s ease; }
+.mode-btn:hover { color: rgba(255, 255, 255, 0.85); }
+.mode-btn.active { color: white; }
+
+/* Timer main row: clock on left, status+controls on right */
+.timer-main-row { display: flex; align-items: center; gap: 1.5rem; justify-content: center; margin-bottom: 1.2rem; }
+.timer-clock-side { width: 120px; height: 120px; flex-shrink: 0; }
+.timer-info-side { display: flex; flex-direction: column; align-items: center; gap: 0.8rem; min-width: 100px; }
+
+/* Fixed-height status slot so appearing/disappearing badge doesn't shift buttons */
+.status-slot { position: relative; height: 34px; display: flex; align-items: center; justify-content: center; }
+
+.status-badge-lg { font-size: 0.85rem; font-weight: 600; padding: 0.3rem 1rem; border-radius: 20px; background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.15); white-space: nowrap; }
+.status-badge-lg.focus { color: #ff6b6b; border-color: rgba(255, 107, 107, 0.3); background: rgba(255, 107, 107, 0.1); }
+.status-badge-lg.break { color: #4ecdc4; border-color: rgba(78, 205, 196, 0.3); background: rgba(78, 205, 196, 0.1); }
+.status-badge-lg.long-break { color: #45b7d1; border-color: rgba(69, 183, 209, 0.3); background: rgba(69, 183, 209, 0.1); }
+.status-badge-lg.stopwatch { color: #f9ca24; border-color: rgba(249, 202, 36, 0.3); background: rgba(249, 202, 36, 0.1); }
+
+.time-circle { position: relative; width: 120px; height: 120px; }
+.progress-ring { display: block; width: 100%; height: 100%; filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.08)); }
+.progress-ring-fill { transition: opacity 0.3s ease, stroke-dashoffset 0.3s ease; }
 .progress-ring-fill.focus { color: #ff6b6b; }
 .progress-ring-fill.break { color: #4ecdc4; }
 .progress-ring-fill.long-break { color: #45b7d1; }
-.time-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: clamp(1.2rem, 3.5vw, 1.8rem); font-weight: 300; font-family: 'Courier New', monospace; }
-.timer-controls { display: flex; gap: 0.4rem; justify-content: center; margin-bottom: 1.5rem; }
-.control-btn { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; padding: 0.6rem 0.8rem; color: white; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; }
-.control-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.2); transform: translateY(-2px); }
-.control-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.start-btn { background: rgba(76, 175, 80, 0.3); border-color: rgba(76, 175, 80, 0.5); }
-.pause-btn { background: rgba(255, 193, 7, 0.3); border-color: rgba(255, 193, 7, 0.5); }
-.reset-btn { background: rgba(244, 67, 54, 0.3); border-color: rgba(244, 67, 54, 0.5); }
-.btn-icon { font-size: 1rem; }
-.timer-settings { margin-bottom: 1rem; }
+.progress-ring-fill.stopwatch { color: #f9ca24; }
+.time-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: clamp(1.2rem, 3.5vw, 1.8rem); font-weight: 300; font-family: 'Courier New', monospace; white-space: nowrap; }
+
+.timer-controls { display: flex; flex-direction: row; gap: 0.5rem; }
+.control-btn { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 12px; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.15s ease; backdrop-filter: blur(8px); }
+.control-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.18); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
+.control-btn:active:not(:disabled) { transform: translateY(0); }
+.control-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.start-btn { background: rgba(76, 175, 80, 0.25); border-color: rgba(76, 175, 80, 0.4); }
+.start-btn:hover:not(:disabled) { background: rgba(76, 175, 80, 0.4); border-color: rgba(76, 175, 80, 0.6); box-shadow: 0 4px 14px rgba(76, 175, 80, 0.25); }
+.pause-btn { background: rgba(255, 193, 7, 0.25); border-color: rgba(255, 193, 7, 0.4); }
+.pause-btn:hover:not(:disabled) { background: rgba(255, 193, 7, 0.4); border-color: rgba(255, 193, 7, 0.6); box-shadow: 0 4px 14px rgba(255, 193, 7, 0.25); }
+.reset-btn { background: rgba(244, 67, 54, 0.2); border-color: rgba(244, 67, 54, 0.35); }
+.reset-btn:hover:not(:disabled) { background: rgba(244, 67, 54, 0.35); border-color: rgba(244, 67, 54, 0.55); box-shadow: 0 4px 14px rgba(244, 67, 54, 0.2); }
+.btn-icon { font-size: 1.1rem; }
+
+@media (max-width: 768px) {
+  .timer-main-row { gap: 1rem; }
+  .timer-clock-side, .time-circle { width: 100px; height: 100px; }
+  .time-text { font-size: clamp(1rem, 4vw, 1.4rem); }
+  .control-btn { width: 42px; height: 42px; }
+  .btn-icon { font-size: 0.95rem; }
+  .mode-switcher { max-width: 200px; }
+}
+
+@media (max-width: 480px) {
+  .timer-main-row { gap: 0.8rem; margin-bottom: 0.8rem; }
+  .timer-clock-side, .time-circle { width: 90px; height: 90px; }
+  .status-slot { height: 28px; }
+  .status-badge-lg { font-size: 0.75rem; padding: 0.2rem 0.7rem; }
+  .control-btn { width: 38px; height: 38px; border-radius: 10px; }
+  .btn-icon { font-size: 0.85rem; }
+  .mode-switcher { max-width: 180px; margin-bottom: 0.6rem; }
+  .mode-btn { padding: 0.35rem 0.8rem; font-size: 0.78rem; }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .timer-main-row { gap: 0.8rem; margin-bottom: 0.6rem; }
+  .timer-clock-side, .time-circle { width: 80px; height: 80px; }
+  .time-text { font-size: 0.95rem; }
+  .timer-info-side { gap: 0.4rem; min-width: 80px; }
+  .status-slot { height: 26px; }
+  .status-badge-lg { font-size: 0.7rem; padding: 0.15rem 0.6rem; }
+  .control-btn { width: 36px; height: 36px; border-radius: 9px; }
+  .btn-icon { font-size: 0.8rem; }
+  .mode-switcher { max-width: 180px; margin-bottom: 0.5rem; }
+  .mode-btn { padding: 0.3rem 0.8rem; font-size: 0.75rem; }
+  .timer-settings { margin-bottom: 0.4rem; }
+  .setting-group { margin-bottom: 0.4rem; font-size: 0.72rem; }
+  .setting-group input[type="number"] { width: 42px; padding: 0.15rem 0.3rem; }
+  .pomodoro-count { font-size: 0.72rem; }
+  .toggle-grid { gap: 0.2rem 0.6rem; margin-top: 0.3rem; }
+  .toggle-item { font-size: 0.68rem; padding: 0.15rem 0; }
+}
+
+.timer-settings { position: relative; margin-bottom: 1rem; }
 .toggle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; margin-top: 0.5rem; }
 .toggle-item { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; padding: 0.3rem 0; }
 .toggle-item label:first-child { opacity: 0.8; white-space: nowrap; }
@@ -1504,6 +1636,22 @@ const handleVisibilityChange = () => {
 .tab-fade-enter-from { opacity: 0; transform: translateX(10px); }
 .tab-fade-leave-to { opacity: 0; transform: translateX(-10px); }
 
+/* Mode switch transitions */
+.status-fade-enter-active { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.status-fade-leave-active { transition: all 0.25s ease; position: absolute; }
+.status-fade-enter-from { opacity: 0; transform: scale(0.8); }
+.status-fade-leave-to { opacity: 0; transform: scale(0.9); }
+
+.time-pop-enter-active { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.time-pop-leave-active { transition: all 0.2s ease; position: absolute; }
+.time-pop-enter-from { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+.time-pop-leave-to { opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
+
+.settings-slide-enter-active { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+.settings-slide-leave-active { transition: all 0.2s ease; position: absolute; width: 100%; }
+.settings-slide-enter-from { opacity: 0; transform: scale(0.97); }
+.settings-slide-leave-to { opacity: 0; transform: scale(1.02); }
+
 .todos-container { color: white; padding: 1rem 0; }
 .todo-input-group { display: flex; gap: 0.8rem; margin-bottom: 1.5rem; }
 .todo-display-control { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1.5rem; padding: 0.8rem 1rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; }
@@ -1552,8 +1700,6 @@ const handleVisibilityChange = () => {
 .about-link:hover { background: rgba(255, 255, 255, 0.15); transform: translateY(-2px); }
 .about-link .icon { width: 24px; height: 24px; }
 .about-link span { white-space: nowrap; }
-.qq-group-number { color: #4ecdc4; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; transition: opacity 0.2s; }
-.qq-group-number:hover { opacity: 0.8; }
 
 @media (max-width: 768px) {
   .about-container { padding: 1rem 0; }

@@ -377,17 +377,7 @@ onMounted(() => {
     aplayer.value.on('error', () => {
       const ap = aplayer.value
       if (!ap) return
-      const index = ap.list?.index ?? 0
-      const current = ap.list?.audios?.[index]
-      if (!current) return
-      if (!current._fallbackUsed && current._fallbackUrl) {
-        current._fallbackUsed = true
-        current.url = current._fallbackUrl
-        showAudioErrorToast('主音源加载失败，切换备用中…')
-        ap.list.switch(index)
-      } else {
-        showAudioErrorToast('当前歌曲加载失败，正在尝试下一首…')
-      }
+      showAudioErrorToast('当前歌曲加载失败，正在尝试下一首…')
     })
     aplayer.value.on('noticeshow', () => {
       const noticeEl = document.querySelector('#aplayer .aplayer-notice')
