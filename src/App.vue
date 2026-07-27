@@ -301,6 +301,9 @@ watch(showControls, (newValue) => {
         playerElement.classList.remove('lrc-only')
         playerElement.style.pointerEvents = 'auto'
       } else {
+        if (isMobile) {
+          try { aplayer.value.list.hide() } catch (e) {}
+        }
         playerElement.classList.add('lrc-only')
         playerElement.style.pointerEvents = 'none'
       }
