@@ -92,33 +92,6 @@ const resolveLocation = (countryCode, regionName, countryName) => {
 
 const API_LIST = [
   async () => {
-    const res = await fetch('https://ip-api.com/json/?lang=zh-CN&fields=status,country,countryCode,regionName')
-    if (!res.ok) return null
-    const d = await res.json()
-    if (d.status !== 'success') return null
-    return resolveLocation(d.countryCode, d.regionName, d.country)
-  },
-  async () => {
-    const res = await fetch('https://ipwhois.app/json/')
-    if (!res.ok) return null
-    const d = await res.json()
-    if (d.success === false) return null
-    return resolveLocation(d.country_code, d.region, d.country)
-  },
-  async () => {
-    const res = await fetch('https://api.ip.sb/geoip')
-    if (!res.ok) return null
-    const d = await res.json()
-    return resolveLocation(d.country_code, d.region, d.country)
-  },
-  async () => {
-    const res = await fetch('https://ipwho.is/')
-    if (!res.ok) return null
-    const d = await res.json()
-    if (!d.success) return null
-    return resolveLocation(d.country_code, d.region, d.country)
-  },
-  async () => {
     const res = await fetch('https://ipinfo.io/json')
     if (!res.ok) return null
     const d = await res.json()
@@ -133,6 +106,13 @@ const API_LIST = [
     return resolveLocation(d.country_code, d.region, d.country_name)
   },
   async () => {
+    const res = await fetch('https://ipwho.is/')
+    if (!res.ok) return null
+    const d = await res.json()
+    if (!d.success) return null
+    return resolveLocation(d.country_code, d.region, d.country)
+  },
+  async () => {
     const res = await fetch('https://api.ip2location.io/')
     if (!res.ok) return null
     const d = await res.json()
@@ -140,24 +120,11 @@ const API_LIST = [
     return resolveLocation(d.country_code, d.region_name, d.country_name)
   },
   async () => {
-    const res = await fetch('https://api.ipgeolocation.io/ipgeo')
+    const res = await fetch('https://ip-api.com/json/?lang=zh-CN&fields=status,country,countryCode,regionName')
     if (!res.ok) return null
     const d = await res.json()
-    if (d.message) return null
-    return resolveLocation(d.country_code2, d.state_prov, d.country_name)
-  },
-  async () => {
-    const res = await fetch('https://freeipapi.com/api/json')
-    if (!res.ok) return null
-    const d = await res.json()
-    return resolveLocation(d.countryCode, d.regionName, d.countryName)
-  },
-  async () => {
-    const res = await fetch('https://ipapi.com/json/')
-    if (!res.ok) return null
-    const d = await res.json()
-    if (d.error) return null
-    return resolveLocation(d.country_code, d.region, d.country_name)
+    if (d.status !== 'success') return null
+    return resolveLocation(d.countryCode, d.regionName, d.country)
   },
 ]
 
