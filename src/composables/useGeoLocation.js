@@ -92,20 +92,6 @@ const resolveLocation = (countryCode, regionName, countryName) => {
 
 const API_LIST = [
   async () => {
-    const res = await fetch('https://ipinfo.io/json')
-    if (!res.ok) return null
-    const d = await res.json()
-    if (d.bogon) return null
-    return resolveLocation(d.country, d.region, d.country)
-  },
-  async () => {
-    const res = await fetch('https://ipapi.co/json/')
-    if (!res.ok) return null
-    const d = await res.json()
-    if (d.error) return null
-    return resolveLocation(d.country_code, d.region, d.country_name)
-  },
-  async () => {
     const res = await fetch('https://ipwho.is/')
     if (!res.ok) return null
     const d = await res.json()
@@ -118,13 +104,6 @@ const API_LIST = [
     const d = await res.json()
     if (d.message) return null
     return resolveLocation(d.country_code, d.region_name, d.country_name)
-  },
-  async () => {
-    const res = await fetch('https://ip-api.com/json/?lang=zh-CN&fields=status,country,countryCode,regionName')
-    if (!res.ok) return null
-    const d = await res.json()
-    if (d.status !== 'success') return null
-    return resolveLocation(d.countryCode, d.regionName, d.country)
   },
 ]
 
