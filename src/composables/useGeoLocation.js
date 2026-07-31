@@ -46,18 +46,19 @@ const COUNTRIES = {
 
 const normalizeCnRegion = (rn) => {
   const r = rn.trim()
-  if (CN_REGIONS[r]) return CN_REGIONS[r]
-  if (CN_REGION_CODES[r.toUpperCase()]) return CN_REGION_CODES[r.toUpperCase()]
   if (/[\u4e00-\u9fa5]/.test(r)) {
-    const stripped = r
+    const s = r
       .replace(/(壮族|回族|维吾尔)?自治区$/, '')
       .replace(/特别行政区$/, '')
       .replace(/省$|市$|自治区$|地区$/g, '')
-    if (CN_REGIONS[stripped]) return CN_REGIONS[stripped]
-    if (stripped && stripped !== r) return stripped
-    return r
+    return (s || r)
   }
-  const upper = r.toUpperCase()
+  if (CN_REGIONS[r]) return CN_REGIONS[r]
+  const code = r.toUpperCase()
+  if (CN_REGION_CODES[code]) return CN_REGION_CODES[code]
+  const stripped = r.replace(/\s*(Sheng|Province|Autonomous Region|Prefecture|Municipality)$/i, '').trim()
+  if (CN_REGIONS[stripped]) return CN_REGIONS[stripped]
+  const upper = stripped.toUpperCase()
   if (CN_REGION_CODES[upper]) return CN_REGION_CODES[upper]
   return null
 }
@@ -92,7 +93,7 @@ const resolveLocation = (countryCode, regionName, countryName) => {
 
 const API_LIST = [
   async () => {
-    const res = await fetch('https://ipwho.is/')
+    const res = await fetch('https://ipwho.is/?lang=zh-CN')
     if (!res.ok) return null
     const d = await res.json()
     if (!d.success) return null
