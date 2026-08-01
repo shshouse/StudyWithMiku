@@ -7,7 +7,7 @@ export const extractPicId = (coverUrl) => {
 }
 export const buildPicUrl = (apiBase, platform, cover) => {
   if (!cover) return ''
-  if (cover.startsWith('http')) return cover
+  if (cover.startsWith('http') || cover.startsWith('/')) return cover
   return `${apiBase}?server=${platform}&type=pic&id=${cover}`
 }
 
