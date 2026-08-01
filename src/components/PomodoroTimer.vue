@@ -324,6 +324,7 @@
                   <p>2.项目代码在github开源，欢迎点上star！</p>
                   <p>3.项目部署域名：study.mikumod.com</p>
                   <p>4.希望你可以喜欢！在悠闲的音乐里和初音一起学习吧~</p>
+                  <p>5.欢迎加入吹水聊天QQ群：<span class="qq-num" @click="copyQQGroup" title="点击复制">941108668</span>（点击复制）</p>
                 </div>
                 <div class="runtime-display">
                   <div class="runtime-label">网站已运行</div>
@@ -487,6 +488,15 @@ const triggerSyncToastText = (text, subtitle = '欢迎回来！Miku 等你许久
   showSyncToast.value = true
   if (syncToastTimer) clearTimeout(syncToastTimer)
   syncToastTimer = setTimeout(() => { showSyncToast.value = false }, 2500)
+}
+
+const copyQQGroup = async () => {
+  try {
+    await navigator.clipboard.writeText('941108668')
+    triggerSyncToastText('QQ群号已复制！', '941108668 欢迎来吹水~')
+  } catch {
+    triggerSyncToastText('复制失败，请手动添加群号：941108668')
+  }
 }
 
 const syncStatusText = computed(() => {
@@ -1757,6 +1767,8 @@ const handleVisibilityChange = () => {
 .about-container { color: white; padding: 2rem 0; text-align: center; }
 .about-content { margin-bottom: 2rem; text-align: left; max-width: 500px; margin: 0 auto 2rem; }
 .about-content p { margin-bottom: 1rem; font-size: 0.9rem; line-height: 1.5; opacity: 0.9; }
+.about-content .qq-num { color: #4ecdc4; font-weight: 600; cursor: pointer; border-bottom: 1px solid rgba(78, 205, 196, 0.6); }
+.about-content .qq-num:hover { color: #6fe0d8; }
 .runtime-display { margin-bottom: 2rem; padding: 1.5rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; }
 .runtime-label { font-size: 0.9rem; opacity: 0.8; margin-bottom: 0.8rem; }
 .runtime-time { display: flex; justify-content: center; align-items: baseline; gap: 0.3rem; font-family: 'Courier New', monospace; }
