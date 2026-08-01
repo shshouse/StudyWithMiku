@@ -751,6 +751,7 @@ const playSharedSong = async ({ platform: targetPlatform, playlistId: targetId, 
 
   if (platform.value === targetPlatform && playlistId.value === targetId && songs.value.length > 0) {
     ap.list.switch(findSongIndex(songs.value, songIndex, name))
+    ap.play()
     return
   }
 
@@ -762,6 +763,7 @@ const playSharedSong = async ({ platform: targetPlatform, playlistId: targetId, 
   ap.list.clear()
   ap.list.add(songs.value)
   ap.list.switch(findSongIndex(songs.value, songIndex, name))
+  ap.play()
 }
 const getPlaylistUrl = (platform, id) => {
   const urls = {
