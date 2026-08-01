@@ -90,7 +90,7 @@
               >
                 <img
                   v-if="renderMusicShare(message.content).cover"
-                  :src="renderMusicShare(message.content).cover"
+                  :src="getMusicCover(renderMusicShare(message.content))"
                   :alt="renderMusicShare(message.content).name"
                   class="chat-music-cover"
                   loading="lazy"
@@ -189,7 +189,7 @@
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { STICKER_IDS, getStickerId, getStickerUrl, buildStickerMessage } from '../data/stickers.js'
-import { parseMusicShareMessage } from '../data/musicShare.js'
+import { parseMusicShareMessage, buildPicUrl } from '../data/musicShare.js'
 import { useGeoLocation } from '../composables/useGeoLocation.js'
 
 const { location: geoLocation, detect: detectGeo } = useGeoLocation()
@@ -240,6 +240,8 @@ const showStickerPanel = ref(false)
 const renderStickerId = (content) => getStickerId(content)
 
 const renderMusicShare = (content) => parseMusicShareMessage(content)
+
+const getMusicCover = (share) => buildPicUrl(import.meta.env.VITE_METING_API, share.platform, share.cover)
 
 const onMusicShareClick = (share) => {
   if (typeof props.onPlaySharedSong === 'function') {

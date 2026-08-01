@@ -1,5 +1,15 @@
 const PREFIX = '[music:'
 const SUFFIX = ']'
+export const extractPicId = (coverUrl) => {
+  if (!coverUrl) return ''
+  const match = String(coverUrl).match(/[?&]id=([^&]+)/)
+  return match ? match[1] : ''
+}
+export const buildPicUrl = (apiBase, platform, cover) => {
+  if (!cover) return ''
+  if (cover.startsWith('http')) return cover
+  return `${apiBase}?server=${platform}&type=pic&id=${cover}`
+}
 
 export const buildMusicShareMessage = ({ platform, playlistId, songIndex, name, cover, playlistName }) => {
   const payload = {
@@ -7,7 +17,7 @@ export const buildMusicShareMessage = ({ platform, playlistId, songIndex, name, 
     pid: playlistId,
     i: songIndex,
     n: name,
-    c: cover,
+    c: extractPicId(cover) || cover,
     pn: playlistName,
   }
   return `${PREFIX}${JSON.stringify(payload)}${SUFFIX}`
