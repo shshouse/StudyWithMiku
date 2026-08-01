@@ -1,4 +1,4 @@
-# Study with Miku
+# Study With Miku
 
 ## 让Miku陪你一起学习！在悠闲中好好学习吧~
 ### 喜欢的话请点点star，谢谢！Ciallo～(∠・ω<)⌒☆
