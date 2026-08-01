@@ -726,7 +726,6 @@ const shareCurrentSong = () => {
     playlistId: playlistId.value,
     songIndex: index,
     name: song.name || '',
-    cover: song.cover || '',
     playlistName: pn,
   })
   if (sendChatMessage(payload)) {
@@ -734,14 +733,24 @@ const shareCurrentSong = () => {
   }
 }
 
-const playSharedSong = async ({ platform: targetPlatform, playlistId: targetId, songIndex } = {}) => {
+const findSongIndex = (list, songIndex, songName) => {
+  if (songIndex >= 0 && songIndex < list.length) {
+    if (!songName || list[songIndex].name === songName) return songIndex
+  }
+  if (songName) {
+    const match = list.findIndex(s => s.name === songName)
+    if (match >= 0) return match
+  }
+  return songIndex >= 0 && songIndex < list.length ? songIndex : 0
+}
+
+const playSharedSong = async ({ platform: targetPlatform, playlistId: targetId, songIndex, name } = {}) => {
   if (!targetPlatform || !targetId || !Number.isFinite(songIndex)) return
   const ap = getAPlayerInstance()
   if (!ap) return
 
   if (platform.value === targetPlatform && playlistId.value === targetId && songs.value.length > 0) {
-    // 同一个歌单：直接 switch
-    if (songIndex >= 0 && songIndex < songs.value.length) ap.list.switch(songIndex)
+    ap.list.switch(findSongIndex(songs.value, songIndex, name))
     return
   }
 
@@ -752,7 +761,7 @@ const playSharedSong = async ({ platform: targetPlatform, playlistId: targetId, 
   }
   ap.list.clear()
   ap.list.add(songs.value)
-  if (songIndex >= 0 && songIndex < songs.value.length) ap.list.switch(songIndex)
+  ap.list.switch(findSongIndex(songs.value, songIndex, name))
 }
 const getPlaylistUrl = (platform, id) => {
   const urls = {
