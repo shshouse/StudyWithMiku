@@ -202,12 +202,13 @@
                     <option v-for="b in BITRATE_OPTIONS" :key="b.value" :value="b.value">{{ b.label }}</option>
                   </select>
                 </div>
-                <div class="setting-group">
+                <div class="setting-group setting-group-row">
                   <label>歌单ID</label>
-                  <input type="text" v-model="inputPlaylistId" placeholder="歌单ID"/>
+                  <input type="text" v-model="inputPlaylistId" placeholder="歌单ID" class="playlist-id-input"/>
+                  <button class="action-btn apply-btn" @click="applyPlaylist">获取</button>
                 </div>
                 <div class="playlist-actions">
-                  <button class="action-btn apply-btn" @click="applyPlaylist">获取</button>
+                  <button class="action-btn share-btn" @click="shareCurrentSong" :disabled="!isAuthenticated" title="分享当前正在播放的歌曲到聊天室">分享当前歌曲</button>
                   <button class="action-btn reset-playlist-btn" @click="resetPlaylist">默认歌单</button>
                   <a class="action-btn help-btn" href="https://www.bilibili.com/opus/1144256090307821590" target="_blank">歌单ID怎么获取?</a>
                 </div>
@@ -297,6 +298,7 @@
                   :current-user-id="getCurrentStudyUserId()"
                   :send-message="sendChatMessage"
                   :profiles="userProfiles"
+                  :on-play-shared-song="playSharedSong"
                   :show-popout="true"
                   :popout-active="false"
                   :has-more="hasMoreHistory"
@@ -365,7 +367,7 @@
       </svg>
     </div>
     <div class="sync-toast-body">
-      <div class="sync-toast-title">学习数据自动同步完成</div>
+      <div class="sync-toast-title">{{ syncToastText }}</div>
       <div class="sync-toast-subtitle">欢迎回来！Miku 等你许久了 &gt;﹏&lt;</div>
     </div>
   </div>
@@ -400,6 +402,7 @@
     :current-user-id="getCurrentStudyUserId()"
     :send-message="sendChatMessage"
     :profiles="userProfiles"
+    :on-play-shared-song="playSharedSong"
     :has-more="hasMoreHistory"
     :is-loading-more="isLoadingHistory"
     :load-more="loadMoreMessages"
@@ -421,6 +424,7 @@
   import { useCrossfade } from '../composables/useCrossfade.js'
   import { getPomodoroSettings, getDefaultPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings, saveTimerSettings } from '../utils/userSettings.js'
   import { recommendPlaylists, LATEST_PLAYLIST_VERSION } from '../data/playlists.js'
+  import { buildMusicShareMessage } from '../data/musicShare.js'
   import { LATEST_UPDATE_VERSION } from '../data/updates.js'
   import { getRandomQuote } from '../data/quotes.js'
   import Updates from './Updates.vue'
@@ -463,6 +467,7 @@ const { crossfadeEnabled, toggleCrossfade, fadeMusicOut, fadeMusicIn } = useCros
 const { recordStudyTime: calendarRecordStudy, recordPomodoro: calendarRecordPomodoro, getCalendarData, setCalendarData } = useCalendar()
 
 const showSyncToast = ref(false)
+const syncToastText = ref('学习数据自动同步完成')
 const CHAT_POPOUT_KEY = 'study_floating_chat_enabled'
 const isChatPopped = ref(localStorage.getItem(CHAT_POPOUT_KEY) !== '0')
 const openChatPopout = () => {
@@ -474,7 +479,9 @@ const closeChatPopout = () => {
   localStorage.setItem(CHAT_POPOUT_KEY, '0')
 }
 let syncToastTimer = null
-const triggerSyncToast = () => {
+const triggerSyncToast = () => triggerSyncToastText('学习数据自动同步完成')
+const triggerSyncToastText = (text) => {
+  syncToastText.value = text
   showSyncToast.value = true
   if (syncToastTimer) clearTimeout(syncToastTimer)
   syncToastTimer = setTimeout(() => { showSyncToast.value = false }, 2500)
@@ -704,6 +711,49 @@ const formatStudyTime = (seconds) => { const h = Math.floor(seconds / 3600); con
 const applyPlaylist = async () => { if (!inputPlaylistId.value) return; await applyCustomPlaylist(selectedPlatform.value, inputPlaylistId.value); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
 const resetPlaylist = async () => { inputPlaylistId.value = ''; await resetToLocal(); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
 const applyRecommendPlaylist = async (item) => { await applyCustomPlaylist(item.platform, item.playlistId); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
+
+const shareCurrentSong = () => {
+  const ap = getAPlayerInstance()
+  if (!ap) return
+  const index = ap.list?.index ?? 0
+  const song = songs.value[index]
+  if (!song) return
+  const pn = playlistId.value === DEFAULT_PLAYLIST_ID
+    ? '默认歌单'
+    : (recommendPlaylists.find(r => r.platform === platform.value && r.playlistId === playlistId.value)?.name || '自定义歌单')
+  const payload = buildMusicShareMessage({
+    platform: platform.value,
+    playlistId: playlistId.value,
+    songIndex: index,
+    name: song.name || '',
+    cover: song.cover || '',
+    playlistName: pn,
+  })
+  if (sendChatMessage(payload)) {
+    triggerSyncToastText('已分享到聊天室')
+  }
+}
+
+const playSharedSong = async ({ platform: targetPlatform, playlistId: targetId, songIndex } = {}) => {
+  if (!targetPlatform || !targetId || !Number.isFinite(songIndex)) return
+  const ap = getAPlayerInstance()
+  if (!ap) return
+
+  if (platform.value === targetPlatform && playlistId.value === targetId && songs.value.length > 0) {
+    // 同一个歌单：直接 switch
+    if (songIndex >= 0 && songIndex < songs.value.length) ap.list.switch(songIndex)
+    return
+  }
+
+  await applyCustomPlaylist(targetPlatform, targetId)
+  if (songs.value.length === 0) {
+    triggerSyncToastText('歌单不可用')
+    return
+  }
+  ap.list.clear()
+  ap.list.add(songs.value)
+  if (songIndex >= 0 && songIndex < songs.value.length) ap.list.switch(songIndex)
+}
 const getPlaylistUrl = (platform, id) => {
   const urls = {
     netease: `https://music.163.com/#/playlist?id=${id}`,
@@ -1532,8 +1582,8 @@ const handleVisibilityChange = () => {
 .playlist-container .platform-select { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; }
 .playlist-container .platform-select:focus { outline: none; border-color: rgba(41, 128, 185, 0.6); background: rgba(255, 255, 255, 0.12); }
 .platform-select option { background: #333; color: white; }
-.playlist-actions { display: flex; gap: 0.8rem; margin-top: 1.5rem; justify-content: center; flex-wrap: wrap; }
-.playlist-container .action-btn { padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; }
+.playlist-actions { display: flex; gap: 0.5rem; margin-top: 1.5rem; justify-content: center; flex-wrap: wrap; }
+.playlist-container .action-btn { padding: 0.5rem 0.8rem; border-radius: 8px; font-size: 0.85rem; white-space: nowrap; }
 
 @media (max-width: 768px) {
   .playlist-actions { gap: 0.5rem; }
@@ -1545,6 +1595,9 @@ const handleVisibilityChange = () => {
 .action-btn:hover { background: rgba(255, 255, 255, 0.2); }
 .apply-btn { background: rgba(76, 175, 80, 0.3); border-color: rgba(76, 175, 80, 0.5); }
 .reset-playlist-btn { background: rgba(255, 152, 0, 0.3); border-color: rgba(255, 152, 0, 0.5); }
+.share-btn { background: rgba(65, 128, 209, 0.3); border-color: rgba(65, 128, 209, 0.5); }
+.share-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.playlist-id-input { min-width: 0; }
 .help-btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
 .playlist-recommend { margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255, 255, 255, 0.1); width: 100%; max-width: 400px; }
 .recommend-title { font-size: 0.9rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 1rem; text-align: left; }

@@ -53,6 +53,7 @@
         :current-user-id="currentUserId"
         :send-message="sendMessage"
         :profiles="profiles"
+        :on-play-shared-song="onPlaySharedSong"
         :show-popout="false"
         :has-more="hasMore"
         :is-loading-more="isLoadingMore"
@@ -94,6 +95,7 @@ defineProps({
   hasMore: { type: Boolean, default: false },
   isLoadingMore: { type: Boolean, default: false },
   loadMore: { type: Function, default: null },
+  onPlaySharedSong: { type: Function, default: null },
 })
 
 defineEmits(['close', 'login', 'ui-enter', 'ui-leave'])

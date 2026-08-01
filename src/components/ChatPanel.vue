@@ -78,6 +78,37 @@
                 loading="lazy"
                 decoding="async"
               />
+              <div
+                v-else-if="renderMusicShare(message.content)"
+                class="chat-music-card"
+                :class="{ 'chat-music-card-own': message.userId && message.userId === currentUserId }"
+                role="button"
+                tabindex="0"
+                :aria-label="`播放分享的歌曲：${renderMusicShare(message.content).name}`"
+                @click="onMusicShareClick(renderMusicShare(message.content))"
+                @keydown.enter="onMusicShareClick(renderMusicShare(message.content))"
+              >
+                <img
+                  v-if="renderMusicShare(message.content).cover"
+                  :src="renderMusicShare(message.content).cover"
+                  :alt="renderMusicShare(message.content).name"
+                  class="chat-music-cover"
+                  loading="lazy"
+                  decoding="async"
+                  referrerpolicy="no-referrer"
+                />
+                <div v-else class="chat-music-cover chat-music-cover-fallback" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 18V5l12-2v13"></path>
+                    <circle cx="6" cy="18" r="3"></circle>
+                    <circle cx="18" cy="16" r="3"></circle>
+                  </svg>
+                </div>
+                <div class="chat-music-info">
+                  <div class="chat-music-name" :title="renderMusicShare(message.content).name">{{ renderMusicShare(message.content).name || '未知歌曲' }}</div>
+                  <div class="chat-music-playlist" :title="renderMusicShare(message.content).playlistName">{{ renderMusicShare(message.content).playlistName || '' }}</div>
+                </div>
+              </div>
               <template v-else>{{ message.content }}</template>
             </div>
           </div>
@@ -158,6 +189,7 @@
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { STICKER_IDS, getStickerId, getStickerUrl, buildStickerMessage } from '../data/stickers.js'
+import { parseMusicShareMessage } from '../data/musicShare.js'
 import { useGeoLocation } from '../composables/useGeoLocation.js'
 
 const { location: geoLocation, detect: detectGeo } = useGeoLocation()
@@ -179,6 +211,7 @@ const props = defineProps({
   hasMore: { type: Boolean, default: false },
   isLoadingMore: { type: Boolean, default: false },
   loadMore: { type: Function, default: null },
+  onPlaySharedSong: { type: Function, default: null },
 })
 
 const emit = defineEmits(['login', 'popout'])
@@ -205,6 +238,14 @@ const avatarLoadFailures = reactive(new Set())
 const showStickerPanel = ref(false)
 
 const renderStickerId = (content) => getStickerId(content)
+
+const renderMusicShare = (content) => parseMusicShareMessage(content)
+
+const onMusicShareClick = (share) => {
+  if (typeof props.onPlaySharedSong === 'function') {
+    props.onPlaySharedSong(share)
+  }
+}
 
 const groupedMessages = computed(() => {
   const list = props.messages
@@ -976,6 +1017,70 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   display: block;
   object-fit: contain;
   margin: 2px 0;
+}
+.chat-music-card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem;
+  margin: 2px 0;
+  max-width: 240px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+.chat-music-card:hover {
+  background: rgba(65, 128, 209, 0.16);
+  border-color: rgba(65, 128, 209, 0.45);
+}
+.chat-music-card:active {
+  transform: scale(0.97);
+}
+.chat-music-card:focus-visible {
+  outline: 2px solid rgba(65, 128, 209, 0.6);
+  outline-offset: 2px;
+}
+.chat-music-card-own {
+  background: rgba(57, 197, 187, 0.1);
+  border-color: rgba(57, 197, 187, 0.3);
+}
+.chat-music-cover {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  display: block;
+}
+.chat-music-cover-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+}
+.chat-music-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.chat-music-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-music-playlist {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.55);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 @media (max-width: 480px) {
   .chat-sticker-panel { grid-template-columns: repeat(5, 1fr); max-width: 240px; }
