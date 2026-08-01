@@ -368,7 +368,7 @@
     </div>
     <div class="sync-toast-body">
       <div class="sync-toast-title">{{ syncToastText }}</div>
-      <div class="sync-toast-subtitle">欢迎回来！Miku 等你许久了 &gt;﹏&lt;</div>
+      <div v-if="syncToastSubtitle" class="sync-toast-subtitle">{{ syncToastSubtitle }}</div>
     </div>
   </div>
 </transition>
@@ -479,9 +479,11 @@ const closeChatPopout = () => {
   localStorage.setItem(CHAT_POPOUT_KEY, '0')
 }
 let syncToastTimer = null
+const syncToastSubtitle = ref('欢迎回来！Miku 等你许久了 >﹏<')
 const triggerSyncToast = () => triggerSyncToastText('学习数据自动同步完成')
-const triggerSyncToastText = (text) => {
+const triggerSyncToastText = (text, subtitle = '欢迎回来！Miku 等你许久了 >﹏<') => {
   syncToastText.value = text
+  syncToastSubtitle.value = subtitle
   showSyncToast.value = true
   if (syncToastTimer) clearTimeout(syncToastTimer)
   syncToastTimer = setTimeout(() => { showSyncToast.value = false }, 2500)
@@ -726,10 +728,11 @@ const shareCurrentSong = () => {
     playlistId: playlistId.value,
     songIndex: index,
     name: song.name || '',
+    cover: song.cover || '',
     playlistName: pn,
   })
   if (sendChatMessage(payload)) {
-    triggerSyncToastText('已分享到聊天室')
+    triggerSyncToastText('已分享到聊天室', '')
   }
 }
 
@@ -757,7 +760,7 @@ const playSharedSong = async ({ platform: targetPlatform, playlistId: targetId, 
 
   await applyCustomPlaylist(targetPlatform, targetId)
   if (songs.value.length === 0) {
-    triggerSyncToastText('歌单不可用')
+    triggerSyncToastText('歌单不可用', '')
     return
   }
   ap.list.clear()
