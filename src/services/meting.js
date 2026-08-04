@@ -11,8 +11,8 @@ export const BITRATE_OPTIONS = [
 ]
 
 const buildPlaylistUrl = (apiBase, server, id, bitrate) => {
-  let url = `${apiBase}?server=${server}&type=playlist&id=${id}`
-  if (bitrate && bitrate !== '320') url += `&br=${bitrate}`
+  let url = `${apiBase}?server=${encodeURIComponent(server)}&type=playlist&id=${encodeURIComponent(id)}`
+  if (bitrate && bitrate !== '320') url += `&br=${encodeURIComponent(bitrate)}`
   return url
 }
 

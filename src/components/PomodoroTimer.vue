@@ -759,6 +759,10 @@ const findSongIndex = (list, songIndex, songName) => {
 
 const playSharedSong = async ({ platform: targetPlatform, playlistId: targetId, songIndex, name } = {}) => {
   if (!targetPlatform || !targetId || !Number.isFinite(songIndex)) return
+  if (!PLATFORMS.some(p => p.value === targetPlatform)) {
+    triggerSyncToastText('不支持的音乐平台', '')
+    return
+  }
   const ap = getAPlayerInstance()
   if (!ap) return
 

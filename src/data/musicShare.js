@@ -1,5 +1,11 @@
 const PREFIX = '[music:'
 const SUFFIX = ']'
+const ALLOWED_PLATFORMS = new Set(['netease', 'tencent'])
+const ALLOWED_COVER_DOMAINS = new Set([
+  'p1.music.126.net', 'p2.music.126.net', 'p3.music.126.net', 'p4.music.126.net',
+  'y.gtimg.cn', 'imgcache.qq.com',
+])
+
 export const extractPicId = (coverUrl) => {
   if (!coverUrl) return ''
   const match = String(coverUrl).match(/[?&]id=([^&]+)/)
@@ -7,8 +13,16 @@ export const extractPicId = (coverUrl) => {
 }
 export const buildPicUrl = (apiBase, platform, cover) => {
   if (!cover) return ''
-  if (cover.startsWith('http') || cover.startsWith('/')) return cover
-  return `${apiBase}?server=${platform}&type=pic&id=${cover}`
+  if (cover.startsWith('/')) return cover
+  if (cover.startsWith('http')) {
+    try {
+      return ALLOWED_COVER_DOMAINS.has(new URL(cover).hostname) ? cover : ''
+    } catch {
+      return ''
+    }
+  }
+  if (!ALLOWED_PLATFORMS.has(platform)) return ''
+  return `${apiBase}?server=${encodeURIComponent(platform)}&type=pic&id=${encodeURIComponent(cover)}`
 }
 
 export const buildMusicShareMessage = ({ platform, playlistId, songIndex, name, cover, playlistName }) => {
@@ -29,7 +43,7 @@ export const parseMusicShareMessage = (content) => {
   if (end < PREFIX.length) return null
   try {
     const d = JSON.parse(content.slice(PREFIX.length, end))
-    if (!d || !d.p || !d.pid || !Number.isFinite(d.i)) return null
+    if (!d || !ALLOWED_PLATFORMS.has(d.p) || !d.pid || !Number.isFinite(d.i)) return null
     return {
       platform: d.p,
       playlistId: String(d.pid),
