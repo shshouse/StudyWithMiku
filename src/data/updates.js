@@ -1,5 +1,16 @@
 export const updates = [
     {
+    date: '2026-8-7',
+    content: [
+      '1.久违的好消息！StudyWithMiku专辑出part6了！双语歌名翻译已经加上！',
+      '2.修复了一些有关于平滑过渡的bug',
+      '3.Enjoy Your Life！',
+    ],
+    images:[
+      '/update/miku4.jpg',
+    ]
+    },
+    {
     date: '2026-8-1',
     content: [
       '1.修正了一部分默认歌单的歌名双语，感谢139**的邮件反馈！',

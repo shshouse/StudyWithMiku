@@ -19,6 +19,7 @@ let preloadedAudioEl = null
 let preloadedForIndex = -1
 let fadeAnimationId = null
 let crossfadeEndFallbackTimer = null
+let isCrossfadeListSwitch = false
 
 export const useCrossfade = () => {
   const toggleCrossfade = (val) => {
@@ -133,7 +134,9 @@ export const useCrossfade = () => {
 
     isHandingOff = true
     setPlayerVolume(ap, 0, 8000)
+    isCrossfadeListSwitch = true
     ap.list.switch(nextIdx)
+    isCrossfadeListSwitch = false
     handoffAudio = tempAudio
 
     let handoffDone = false
@@ -308,18 +311,21 @@ export const useCrossfade = () => {
     })
 
     ap.on('listswitch', () => {
-      if (isHandingOff) {
+      if (isCrossfadeListSwitch) {
         crossfadeTriggered = false
         return
       }
-      if (isCrossfading || handoffAudio) {
+      if (isCrossfading || isHandingOff || handoffAudio) {
         cleanup(ap, onMediaSessionSync)
       }
       crossfadeTriggered = false
     })
 
     ap.on('pause', () => {
-      if (isHandingOff) return
+      if (isHandingOff) {
+        if (handoffAudio) handoffAudio.pause()
+        return
+      }
       if (isCrossfading) {
         const a = ap.audio
         if (a.ended || (Number.isFinite(a.duration) && a.duration - a.currentTime < 0.5)) return
@@ -331,7 +337,10 @@ export const useCrossfade = () => {
     })
 
     ap.on('play', () => {
-      if (isHandingOff) return
+      if (isHandingOff) {
+        if (handoffAudio) handoffAudio.play().catch(() => { })
+        return
+      }
       if (crossfadeAudio) crossfadeAudio.play().catch(() => { })
       if (handoffAudio) handoffAudio.play().catch(() => { })
     })
