@@ -62,7 +62,8 @@
             <div class="chat-message-meta">
               <span class="chat-message-name">{{ resolveUsername(group.messages[0]) || '游客' }}</span>
               <span v-if="getGroupLocation(group.messages)" class="chat-message-location">{{ getGroupLocation(group.messages) }}</span>
-              <span class="chat-message-time"><span class="chat-message-time-date">{{ formatChatTime(group.messages[0].createdAt).datePart }}</span> <span class="chat-message-time-hm">{{ formatChatTime(group.messages[0].createdAt).timePart }}</span></span>
+              <span class="chat-message-time-date">{{ formatChatTime(group.messages[0].createdAt).datePart }}</span>
+              <span class="chat-message-time-hm">{{ formatChatTime(group.messages[0].createdAt).timePart }}</span>
             </div>
             <div
               v-for="message in group.messages"
@@ -552,10 +553,35 @@ const onDocumentClick = (e) => {
   if (!panel && !toggle) closeStickerPanel()
 }
 
+const adjustMetaOverflow = () => {
+  nextTick(() => {
+    const container = chatMessagesRef.value
+    if (!container) return
+    const metas = container.querySelectorAll('.chat-message-meta')
+    for (const meta of metas) {
+      meta.classList.remove('hide-date', 'hide-time', 'hide-location')
+      if (meta.scrollWidth <= meta.clientWidth) continue
+      meta.classList.add('hide-date')
+      if (meta.scrollWidth <= meta.clientWidth) continue
+      meta.classList.add('hide-time')
+      if (meta.scrollWidth <= meta.clientWidth) continue
+      meta.classList.add('hide-location')
+    }
+  })
+}
+
+let metaResizeObserver = null
+
 onMounted(() => {
   restoreScrollPosition()
   document.addEventListener('click', onDocumentClick)
   detectGeo()
+  adjustMetaOverflow()
+  if (chatMessagesRef.value && typeof ResizeObserver !== 'undefined') {
+    metaResizeObserver = new ResizeObserver(() => adjustMetaOverflow())
+    metaResizeObserver.observe(chatMessagesRef.value)
+  }
+  window.addEventListener('resize', adjustMetaOverflow)
 })
 
 onUnmounted(() => {
@@ -565,6 +591,11 @@ onUnmounted(() => {
   }
   saveScrollPosition()
   document.removeEventListener('click', onDocumentClick)
+  if (metaResizeObserver) {
+    metaResizeObserver.disconnect()
+    metaResizeObserver = null
+  }
+  window.removeEventListener('resize', adjustMetaOverflow)
 })
 
 const getOldestMessageId = () => (props.messages.length ? props.messages[0].id : '')
@@ -613,6 +644,7 @@ watch(
         unreadCount.value += (newLen - oldLen)
       }
       lastOldestId = newOldestId
+      adjustMetaOverflow()
     })
   },
   { deep: false }
@@ -850,10 +882,7 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   color: rgba(255, 255, 255, 0.78);
 }
 .chat-message-location {
-  flex-shrink: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
   white-space: nowrap;
   padding: 0.06rem 0.3rem;
   border-radius: 4px;
@@ -861,9 +890,11 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   font-size: 0.66rem;
   color: rgba(255, 255, 255, 0.45);
 }
-.chat-message-time { flex-shrink: 1; min-width: 0; white-space: nowrap; overflow: hidden; }
-.chat-message-time-date { opacity: 0.7; }
-.chat-message-time-hm { flex-shrink: 0; }
+.chat-message-time-date,
+.chat-message-time-hm { flex-shrink: 0; white-space: nowrap; opacity: 0.7; }
+.chat-message-meta.hide-date .chat-message-time-date,
+.chat-message-meta.hide-time .chat-message-time-hm,
+.chat-message-meta.hide-location .chat-message-location { display: none; }
 .chat-message-item {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
