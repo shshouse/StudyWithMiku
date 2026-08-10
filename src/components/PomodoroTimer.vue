@@ -208,7 +208,7 @@
                   <button class="action-btn apply-btn" @click="applyPlaylist">获取</button>
                 </div>
                 <div class="playlist-actions">
-                  <button class="action-btn share-btn" @click="shareCurrentSong" :disabled="!isAuthenticated" title="分享当前正在播放的歌曲到聊天室">分享当前歌曲</button>
+                  <button class="action-btn song-send-btn" @click="shareCurrentSong" :disabled="!isAuthenticated" title="分享当前正在播放的歌曲到聊天室">分享当前歌曲</button>
                   <button class="action-btn reset-playlist-btn" @click="resetPlaylist">默认歌单</button>
                   <a class="action-btn help-btn" href="https://www.bilibili.com/opus/1144256090307821590" target="_blank">歌单ID怎么获取?</a>
                 </div>
@@ -1623,8 +1623,8 @@ const handleVisibilityChange = () => {
 .action-btn:hover { background: rgba(255, 255, 255, 0.2); }
 .apply-btn { background: rgba(76, 175, 80, 0.3); border-color: rgba(76, 175, 80, 0.5); }
 .reset-playlist-btn { background: rgba(255, 152, 0, 0.3); border-color: rgba(255, 152, 0, 0.5); }
-.share-btn { background: rgba(65, 128, 209, 0.3); border-color: rgba(65, 128, 209, 0.5); }
-.share-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.song-send-btn { background: rgba(65, 128, 209, 0.3); border-color: rgba(65, 128, 209, 0.5); }
+.song-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .playlist-id-input { min-width: 0; }
 .help-btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
 .playlist-recommend { margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255, 255, 255, 0.1); width: 100%; max-width: 400px; }
