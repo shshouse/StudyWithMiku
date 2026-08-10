@@ -245,12 +245,19 @@
                   </template>
                   <template v-else>
                     <div class="user-info">
-                      <p class="login-hint">已登录为: <span class="username">{{ username }}</span></p>
+                      <div class="user-profile-row">
+                        <img class="user-avatar" :src="currentUserAvatar" alt="头像" loading="lazy" decoding="async" referrerpolicy="no-referrer" @error="(e) => e.target.src = '/favicon.svg'" />
+                        <div class="user-profile-text">
+                          <span class="user-display-name">{{ currentDisplayName }}</span>
+                          <a class="user-edit-link" href="https://mikumod.com/settings" target="_blank" rel="noopener noreferrer">修改</a>
+                        </div>
+                      </div>
                       <div class="sync-status">
                         <span class="status-dot" :class="syncStatus"></span>
                         <span class="sync-status-text">{{ syncStatusText }}</span>
                       </div>
                     </div>
+                    <p class="user-profile-hint">修改后需要一定时间才显示</p>
                     <div class="sync-actions">
                       <button class="action-btn sync-btn" @click="manualSync" :disabled="syncStatus === 'syncing'">数据同步</button>
                       <button class="action-btn logout-btn" @click="logout">退出登录</button>
@@ -509,6 +516,23 @@ const syncStatusText = computed(() => {
   }
   return '未同步'
 })
+
+const currentUserProfile = computed(() => {
+  if (!isLoggedIn.value || !userId.value) return null
+  return userProfiles[userId.value] || null
+})
+const currentUserAvatar = computed(() => {
+  const p = currentUserProfile.value
+  return p?.avatar_url || '/favicon.svg'
+})
+const currentDisplayName = computed(() => {
+  const p = currentUserProfile.value
+  return (p?.username || username.value || '').trim() || '游客'
+})
+
+watch([isLoggedIn, userId], ([loggedIn, uid]) => {
+  if (loggedIn && uid) ensureProfiles([uid])
+}, { immediate: true })
 const dismissSessionExpired = () => {
   clearSessionExpired()
 }
@@ -1797,7 +1821,14 @@ const handleVisibilityChange = () => {
 
 
 
-.user-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; }
+.user-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
+.user-profile-row { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.user-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid rgba(255, 255, 255, 0.18); }
+.user-profile-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.user-display-name { font-size: 0.9rem; font-weight: 600; color: rgba(255, 255, 255, 0.92); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-edit-link { font-size: 0.72rem; color: rgba(57, 197, 187, 0.85); text-decoration: none; width: fit-content; }
+.user-edit-link:hover { color: rgba(57, 197, 187, 1); text-decoration: underline; }
+.user-profile-hint { font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin: 0 0 0.8rem 0; }
 .sync-status { display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.6rem; border-radius: 12px; background: rgba(0, 0, 0, 0.2); font-size: 0.8rem; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
 .status-dot.idle { background: #95a5a6; }
