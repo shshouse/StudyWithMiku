@@ -1675,7 +1675,9 @@ const handleVisibilityChange = () => {
 .feature-item { font-size: 0.85rem; color: rgba(255, 255, 255, 0.9); display: flex; align-items: center; gap: 0.4rem; }
 .check-icon { color: #4ecdc4; font-weight: bold; }
 
-.chat-tab-wrapper { display: flex; flex-direction: column; min-height: 420px; }
+.chat-tab-wrapper { display: flex; flex-direction: column; min-height: 420px; height: 100%; }
+.chat-tab-wrapper :deep(.chat-container) { min-height: 0; }
+.chat-tab-wrapper :deep(.chat-messages-wrapper) { max-height: none; flex: 1; min-height: 0; }
 .chat-popout-placeholder {
   display: flex;
   flex-direction: column;
