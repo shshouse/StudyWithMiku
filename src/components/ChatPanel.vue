@@ -62,7 +62,7 @@
             <div class="chat-message-meta">
               <span class="chat-message-name">{{ resolveUsername(group.messages[0]) || '游客' }}</span>
               <span v-if="getGroupLocation(group.messages)" class="chat-message-location">{{ getGroupLocation(group.messages) }}</span>
-              <span class="chat-message-time">{{ formatChatTime(group.messages[0].createdAt) }}</span>
+              <span class="chat-message-time"><span class="chat-message-time-date">{{ formatChatTime(group.messages[0].createdAt).datePart }}</span> <span class="chat-message-time-hm">{{ formatChatTime(group.messages[0].createdAt).timePart }}</span></span>
             </div>
             <div
               v-for="message in group.messages"
@@ -294,7 +294,7 @@ const formatChatTime = (value) => {
   const d = String(date.getDate())
   const hh = String(date.getHours()).padStart(2, '0')
   const mm = String(date.getMinutes()).padStart(2, '0')
-  return `${y}.${mo}.${d} ${hh}:${mm}`
+  return { datePart: `${y}.${mo}.${d}`, timePart: `${hh}:${mm}` }
 }
 
 const getAvatarSeed = (message) => String(message.userId || message.username || 'guest')
@@ -842,6 +842,7 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
 }
 .chat-message-group.own .chat-message-meta { justify-content: flex-end; }
 .chat-message-name {
+  flex-shrink: 0;
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -849,14 +850,20 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   color: rgba(255, 255, 255, 0.78);
 }
 .chat-message-location {
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 0.06rem 0.3rem;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.08);
   font-size: 0.66rem;
   color: rgba(255, 255, 255, 0.45);
 }
-.chat-message-time { flex-shrink: 0; }
+.chat-message-time { flex-shrink: 1; min-width: 0; white-space: nowrap; overflow: hidden; }
+.chat-message-time-date { opacity: 0.7; }
+.chat-message-time-hm { flex-shrink: 0; }
 .chat-message-item {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
