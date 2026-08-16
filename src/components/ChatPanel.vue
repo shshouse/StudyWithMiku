@@ -674,6 +674,12 @@ watch(
   { deep: false }
 )
 
+watch(
+  () => props.profiles,
+  () => adjustMetaOverflow(),
+  { deep: true }
+)
+
 defineExpose({ scrollChatToBottom, jumpToBottom })
 </script>
 
@@ -895,10 +901,12 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   margin-bottom: 0.25rem;
   font-size: 0.72rem;
   color: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
 }
 .chat-message-group.own .chat-message-meta { justify-content: flex-end; }
 .chat-message-name {
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
