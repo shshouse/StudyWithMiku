@@ -56,3 +56,25 @@ export const parseMusicShareMessage = (content) => {
     return null
   }
 }
+
+const COUNTDOWN_PREFIX = '[countdown:'
+const COUNTDOWN_SUFFIX = ']'
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+export const buildCountdownShareMessage = ({ title, date }) => {
+  if (!title || !DATE_PATTERN.test(String(date))) return ''
+  return `${COUNTDOWN_PREFIX}${JSON.stringify({ t: String(title).slice(0, 40), d: date })}${COUNTDOWN_SUFFIX}`
+}
+
+export const parseCountdownShareMessage = (content) => {
+  if (typeof content !== 'string' || !content.startsWith(COUNTDOWN_PREFIX)) return null
+  const end = content.lastIndexOf(COUNTDOWN_SUFFIX)
+  if (end < COUNTDOWN_PREFIX.length) return null
+  try {
+    const d = JSON.parse(content.slice(COUNTDOWN_PREFIX.length, end))
+    if (!d || typeof d.t !== 'string' || !d.t || typeof d.d !== 'string' || !DATE_PATTERN.test(d.d)) return null
+    return { title: d.t, date: d.d }
+  } catch {
+    return null
+  }
+}

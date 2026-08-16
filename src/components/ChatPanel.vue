@@ -111,6 +111,17 @@
                   <div class="chat-music-playlist" :title="renderMusicShare(message.content).playlistName">{{ renderMusicShare(message.content).playlistName || '' }}</div>
                 </div>
               </div>
+              <div v-else-if="renderCountdownShare(message.content)" class="chat-countdown-card">
+                <svg class="chat-countdown-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="13" r="8"></circle>
+                  <path d="M12 9v4l2.5 2.5"></path>
+                  <path d="M9 2h6"></path>
+                </svg>
+                <div class="chat-countdown-info">
+                  <div class="chat-countdown-title" :title="renderCountdownShare(message.content).title">{{ renderCountdownShare(message.content).title }}</div>
+                  <div class="chat-countdown-meta">{{ getCountdownText(message.content) }}</div>
+                </div>
+              </div>
               <template v-else>{{ message.content }}</template>
             </div>
           </div>
@@ -191,7 +202,8 @@
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { STICKER_IDS, getStickerId, getStickerUrl, buildStickerMessage } from '../data/stickers.js'
-import { parseMusicShareMessage, buildPicUrl } from '../data/musicShare.js'
+import { parseMusicShareMessage, parseCountdownShareMessage, buildPicUrl } from '../data/musicShare.js'
+import { getCountdownDays } from '../composables/useCountdown.js'
 import { useGeoLocation } from '../composables/useGeoLocation.js'
 
 const { location: geoLocation, detect: detectGeo } = useGeoLocation()
@@ -242,6 +254,18 @@ const showStickerPanel = ref(false)
 const renderStickerId = (content) => getStickerId(content)
 
 const renderMusicShare = (content) => parseMusicShareMessage(content)
+
+const renderCountdownShare = (content) => parseCountdownShareMessage(content)
+
+const getCountdownText = (content) => {
+  const c = renderCountdownShare(content)
+  if (!c) return ''
+  const days = getCountdownDays(c.date)
+  if (days === null) return c.date
+  if (days > 0) return `还有 ${days} 天 · ${c.date}`
+  if (days === 0) return `就是今天 · ${c.date}`
+  return `已过 ${-days} 天 · ${c.date}`
+}
 
 const getMusicCover = (share) => buildPicUrl(import.meta.env.VITE_METING_API, share.platform, share.cover)
 
@@ -1127,6 +1151,40 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   color: rgba(255, 255, 255, 0.55);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-countdown-card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.65rem;
+  margin: 2px 0;
+  max-width: 240px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+}
+.chat-countdown-icon {
+  flex-shrink: 0;
+  color: rgba(57, 197, 187, 0.85);
+}
+.chat-countdown-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.chat-countdown-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-countdown-meta {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.55);
   white-space: nowrap;
 }
 @media (max-width: 480px) {

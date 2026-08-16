@@ -95,7 +95,6 @@ export function useCalendar() {
   })
 
   const getDayLog = (dateStr) => dailyLog.value[dateStr] || { studyTime: 0, pomodoros: 0 }
-  const getDayPlans = (dateStr) => plans.value[dateStr] || []
 
   // 热力图等级 0-4，基于当天学习时间
   const getHeatLevel = (dateStr) => {
@@ -127,45 +126,6 @@ export function useCalendar() {
     saveDailyLog(dailyLog.value)
   }
 
-  // 计划 CRUD
-  const PLAN_COLORS = [
-    { value: 'default', label: '默认', color: 'rgba(255,255,255,0.6)' },
-    { value: 'red', label: '重要', color: '#ff6b6b' },
-    { value: 'green', label: '轻松', color: '#4ecdc4' },
-    { value: 'blue', label: '阅读', color: '#45b7d1' },
-    { value: 'yellow', label: '复习', color: '#ffc107' },
-    { value: 'purple', label: '练习', color: '#a29bfe' },
-  ]
-
-  const addPlan = (dateStr, text, color = 'default') => {
-    if (!text.trim()) return
-    if (!plans.value[dateStr]) plans.value[dateStr] = []
-    plans.value[dateStr].push({
-      id: Date.now(),
-      text: text.trim(),
-      done: false,
-      color,
-    })
-    savePlans(plans.value)
-  }
-
-  const togglePlan = (dateStr, planId) => {
-    const list = plans.value[dateStr]
-    if (!list) return
-    const plan = list.find(p => p.id === planId)
-    if (plan) {
-      plan.done = !plan.done
-      savePlans(plans.value)
-    }
-  }
-
-  const deletePlan = (dateStr, planId) => {
-    if (!plans.value[dateStr]) return
-    plans.value[dateStr] = plans.value[dateStr].filter(p => p.id !== planId)
-    if (plans.value[dateStr].length === 0) delete plans.value[dateStr]
-    savePlans(plans.value)
-  }
-
   // 获取月度统计
   const monthStats = computed(() => {
     const y = year.value
@@ -188,7 +148,6 @@ export function useCalendar() {
     return { totalTime, totalPomodoros, activeDays }
   })
 
-  // 导出给同步用
   const getCalendarData = () => ({
     dailyLog: dailyLog.value,
     plans: plans.value,
@@ -214,14 +173,9 @@ export function useCalendar() {
     nextMonth,
     goToday,
     getDayLog,
-    getDayPlans,
     getHeatLevel,
     recordStudyTime,
     recordPomodoro,
-    PLAN_COLORS,
-    addPlan,
-    togglePlan,
-    deletePlan,
     monthStats,
     formatDate,
     getCalendarData,

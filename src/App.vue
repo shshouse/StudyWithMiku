@@ -17,7 +17,7 @@
         @stalled="onVideoStalled"
       ></video>
     </transition>
-    <div class="overlay"></div>
+    <div class="overlay" :style="{ background: `rgba(0, 0, 0, ${overlayOpacity})` }"></div>
     <div class="content" :class="{ hidden: !showControls }">
       <h1 class="title">Study With Miku</h1>
       <p class="subtitle">Love by SHSHOUSE</p>
@@ -45,7 +45,8 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useFullscreen } from '@vueuse/core'
-import { loadScript, loadStyle, preloadVideos } from './utils/cache.js'
+import 'aplayer/dist/APlayer.min.css'
+import { preloadVideos } from './utils/cache.js'
 import { setAPlayerInstance, setHoveringUI, isHoveringUI } from './utils/eventBus.js'
 import { useMusic } from './composables/useMusic.js'
 import { useCrossfade } from './composables/useCrossfade.js'
@@ -335,17 +336,13 @@ onMounted(() => {
       console.error('视频预加载失败:', error)
     }
   }
+  let APlayerCtor = null
   const loadAPlayer = async () => {
-    if (window.APlayer) {
-      await initAPlayer()
-      return
-    }
-    
     try {
-      await Promise.all([
-        loadStyle('./APlayer.min.css'),
-        loadScript('./APlayer.min.js')
-      ])
+      if (!APlayerCtor) {
+        const mod = await import('aplayer')
+        APlayerCtor = mod.default
+      }
       await initAPlayer()
     } catch (error) {
       console.error('加载 APlayer 资源失败:', error)
@@ -356,7 +353,7 @@ onMounted(() => {
     const savedMusicIndex = getMusicIndex()
     const savedSettings = getAPlayerSettings()
     
-    aplayer.value = new APlayer({
+    aplayer.value = new APlayerCtor({
       container: document.getElementById('aplayer'),
       fixed: true,
       autoplay: true,

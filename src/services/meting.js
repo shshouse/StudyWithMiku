@@ -21,14 +21,19 @@ const mapSongName = (originalName, id) => {
   return id === DEFAULT_PLAYLIST_ID && songNameMap[cleanName] ? songNameMap[cleanName] : originalName
 }
 
+const defuseHtml = (value) => String(value ?? '')
+  .replace(/</g, '＜')
+  .replace(/>/g, '＞')
+  .replace(/"/g, '＂')
+
 const normalizeSongs = (data, id) => data.map(song => {
   const originalName = song.title || song.name
   return {
-    name: mapSongName(originalName, id),
-    artist: song.author || song.artist,
+    name: defuseHtml(mapSongName(originalName, id)),
+    artist: defuseHtml(song.author || song.artist || ''),
     url: song.url,
     cover: song.pic || song.cover,
-    lrc: song.lrc
+    lrc: song.lrc ? defuseHtml(song.lrc) : song.lrc
   }
 })
 

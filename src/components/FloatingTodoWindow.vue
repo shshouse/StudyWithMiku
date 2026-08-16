@@ -1,21 +1,21 @@
 <template>
   <div
     ref="containerRef"
-    class="floating-chat"
+    class="floating-todo"
     :class="{ dragging: isDragging, resizing: isResizing }"
     :style="containerStyle"
     @mouseenter="$emit('ui-enter')"
     @mouseleave="$emit('ui-leave')"
     @touchstart.stop="$emit('ui-enter')"
-    @touchend="$emit('ui-leave')"
+    @touchend.stop="$emit('ui-leave')"
   >
     <div
-      class="floating-chat-header"
+      class="floating-todo-header"
       @mousedown="onDragStart"
       @touchstart.prevent="onDragStart"
     >
-      <div class="floating-chat-header-title">
-        <span class="floating-chat-grip" aria-hidden="true">
+      <div class="floating-todo-header-title">
+        <span class="floating-todo-grip" aria-hidden="true">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <circle cx="9" cy="6" r="1.5"></circle>
             <circle cx="15" cy="6" r="1.5"></circle>
@@ -25,11 +25,11 @@
             <circle cx="15" cy="18" r="1.5"></circle>
           </svg>
         </span>
-        <span>聊天室</span>
+        <span>待办便签＞﹏＜</span>
       </div>
       <button
         type="button"
-        class="floating-chat-close"
+        class="floating-todo-close"
         title="关闭独立窗口"
         aria-label="关闭独立窗口"
         @mousedown.stop
@@ -42,29 +42,26 @@
         </svg>
       </button>
     </div>
-    <div class="floating-chat-body">
-      <ChatPanel
-        :messages="messages"
-        :online-count="onlineCount"
-        :is-connected="isConnected"
-        :is-authenticated="isAuthenticated"
-        :is-logged-in="isLoggedIn"
-        :chat-error="chatError"
-        :current-user-id="currentUserId"
-        :send-message="sendMessage"
-        :profiles="profiles"
-        :on-play-shared-song="onPlaySharedSong"
-        :show-popout="false"
-        :has-more="hasMore"
-        :is-loading-more="isLoadingMore"
-        :load-more="loadMore"
-        title="聊天室"
-        subtitle="和正在学习的人打个招呼吧"
-        @login="$emit('login')"
-      />
-    </div>
+    <transition-group name="ftodo" tag="div" class="floating-todo-body">
+      <div v-for="todo in sortedTodos" :key="todo.id" class="floating-todo-item" :class="{ completed: todo.completed }">
+        <button
+          type="button"
+          class="floating-todo-check"
+          :class="{ done: todo.completed }"
+          :title="todo.completed ? '标记为未完成' : '标记为完成'"
+          :aria-label="todo.completed ? '标记为未完成' : '标记为完成'"
+          @click="$emit('toggle', todo.id)"
+        >
+          <svg v-if="todo.completed" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </button>
+        <div class="floating-todo-text">{{ todo.text }}</div>
+      </div>
+      <div v-if="todos.length === 0" key="empty" class="floating-todo-empty">暂无待办事项</div>
+    </transition-group>
     <div
-      class="floating-chat-resize-handle"
+      class="floating-todo-resize-handle"
       @mousedown.prevent="onResizeStart"
       @touchstart.prevent="onResizeStart"
       title="拖动以调整大小"
@@ -80,29 +77,21 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import ChatPanel from './ChatPanel.vue'
 
-defineProps({
-  messages: { type: Array, default: () => [] },
-  onlineCount: { type: Number, default: 0 },
-  isConnected: { type: Boolean, default: false },
-  isAuthenticated: { type: Boolean, default: false },
-  isLoggedIn: { type: Boolean, default: false },
-  chatError: { type: String, default: '' },
-  currentUserId: { type: String, default: '' },
-  sendMessage: { type: Function, required: true },
-  profiles: { type: Object, default: () => ({}) },
-  hasMore: { type: Boolean, default: false },
-  isLoadingMore: { type: Boolean, default: false },
-  loadMore: { type: Function, default: null },
-  onPlaySharedSong: { type: Function, default: null },
+const props = defineProps({
+  todos: { type: Array, default: () => [] },
 })
 
-defineEmits(['close', 'login', 'ui-enter', 'ui-leave'])
+const sortedTodos = computed(() => [
+  ...props.todos.filter(t => !t.completed),
+  ...props.todos.filter(t => t.completed),
+])
 
-const STORAGE_KEY = 'study_floating_chat_layout'
-const MIN_WIDTH = 300
-const MIN_HEIGHT = 380
+defineEmits(['close', 'toggle', 'ui-enter', 'ui-leave'])
+
+const STORAGE_KEY = 'study_floating_todo_layout'
+const MIN_WIDTH = 260
+const MIN_HEIGHT = 300
 const DEFAULT_WIDTH = MIN_WIDTH
 const DEFAULT_HEIGHT = MIN_HEIGHT
 const MARGIN = 12
@@ -151,11 +140,11 @@ const loadLayout = () => {
       }
     }
   } catch (e) {
-    console.warn('读取悬浮聊天窗布局失败', e)
+    console.warn('读取悬浮待办窗布局失败', e)
   }
   const size = clampSize(DEFAULT_WIDTH, DEFAULT_HEIGHT)
   const pos = clampPosition(
-    window.innerWidth - size.width - MARGIN,
+    window.innerWidth - size.width - MARGIN - 320,
     window.innerHeight - size.height - MARGIN,
     size.width,
     size.height
@@ -169,7 +158,7 @@ const saveLayout = () => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(layout.value))
   } catch (e) {
-    console.warn('保存悬浮聊天窗布局失败', e)
+    console.warn('保存悬浮待办窗布局失败', e)
   }
 }
 
@@ -290,7 +279,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.floating-chat {
+.floating-todo {
   position: fixed;
   z-index: 1600;
   display: flex;
@@ -306,11 +295,11 @@ onUnmounted(() => {
   user-select: none;
   transition: box-shadow 0.3s ease, border-color 0.3s ease;
 }
-.floating-chat.dragging,
-.floating-chat.resizing {
+.floating-todo.dragging,
+.floating-todo.resizing {
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(57, 197, 187, 0.35);
 }
-.floating-chat-header {
+.floating-todo-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -320,7 +309,7 @@ onUnmounted(() => {
   cursor: move;
   touch-action: none;
 }
-.floating-chat-header-title {
+.floating-todo-header-title {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -328,13 +317,13 @@ onUnmounted(() => {
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
 }
-.floating-chat-grip {
+.floating-todo-grip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: rgba(255, 255, 255, 0.45);
 }
-.floating-chat-close {
+.floating-todo-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -347,33 +336,96 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.2s ease;
 }
-.floating-chat-close:hover {
+.floating-todo-close:hover {
   color: white;
   background: rgba(244, 67, 54, 0.25);
   border-color: rgba(244, 67, 54, 0.45);
 }
-.floating-chat-body {
+.floating-todo-body {
   flex: 1;
   min-height: 0;
   padding: 0.85rem;
-  overflow: hidden;
-  user-select: text;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
 }
-.floating-chat-body :deep(.chat-container) {
-  min-height: 0;
-  height: 100%;
+.floating-todo-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  transition: all 0.3s ease;
 }
-.floating-chat-body :deep(.chat-messages-wrapper) {
-  min-height: 0;
-  max-height: none;
-  flex: 1;
+.floating-todo-item:hover {
+  background: rgba(255, 255, 255, 0.14);
+  transform: translateX(4px);
 }
-.floating-chat-body :deep(.chat-messages) {
-  min-height: 0;
-  max-height: none;
-  flex: 1;
+.floating-todo-check {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: transparent;
+  border-radius: 4px;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
-.floating-chat-resize-handle {
+.floating-todo-check:hover {
+  border-color: #4ecdc4;
+  transform: scale(1.1);
+}
+.floating-todo-check.done {
+  background: #4ecdc4;
+  border-color: #4ecdc4;
+  color: white;
+}
+.floating-todo-item.completed {
+  opacity: 0.55;
+}
+.floating-todo-item.completed .floating-todo-text {
+  text-decoration: line-through;
+  color: rgba(255, 255, 255, 0.5);
+}
+.floating-todo-text {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  opacity: 0.9;
+  overflow-wrap: break-word;
+}
+.floating-todo-empty {
+  text-align: center;
+  padding: 2rem;
+  opacity: 0.5;
+  font-size: 0.85rem;
+}
+.ftodo-move { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+.ftodo-enter-active { transition: all 0.3s ease; }
+.ftodo-leave-active { transition: all 0.3s ease; position: absolute; width: calc(100% - 1.7rem); }
+.ftodo-enter-from { opacity: 0; transform: translateY(-8px); }
+.ftodo-leave-to { opacity: 0; transform: translateX(16px); }
+.floating-todo-body::-webkit-scrollbar {
+  width: 6px;
+}
+.floating-todo-body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+.floating-todo-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+.floating-todo-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+.floating-todo-resize-handle {
   position: absolute;
   right: 2px;
   bottom: 2px;
@@ -388,12 +440,12 @@ onUnmounted(() => {
   touch-action: none;
   border-bottom-right-radius: 14px;
 }
-.floating-chat-resize-handle:hover {
+.floating-todo-resize-handle:hover {
   color: rgba(255, 255, 255, 0.8);
 }
 
 @media (max-width: 640px) {
-  .floating-chat { border-radius: 14px; }
-  .floating-chat-header { padding: 0.5rem 0.65rem; }
+  .floating-todo { border-radius: 14px; }
+  .floating-todo-header { padding: 0.5rem 0.65rem; }
 }
 </style>

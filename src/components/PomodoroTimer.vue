@@ -77,8 +77,15 @@
               <transition name="tab-fade" mode="out-in">
                 <div v-if="currentTab === 'todos'" key="todos" class="todos-container">
                   <div class="todo-input-group">
-                    <input type="text" v-model="newTodoText" @keyup.enter="addTodo" placeholder="添加待办事项..." class="todo-input"/>
+                    <input type="text" v-model="newTodoText" @keyup.enter="addTodo" placeholder="添加待办事项..." maxlength="200" class="todo-input"/>
                     <button @click="addTodo" class="action-btn add-todo-btn">添加</button>
+                    <button type="button" class="action-btn todo-popout-toggle" title="独立窗口显示待办" aria-label="独立窗口显示待办" @click="openTodoPopout">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M15 3h6v6"></path>
+                        <path d="M10 14 21 3"></path>
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                      </svg>
+                    </button>
                   </div>
                   <div class="todo-display-control">
                     <label class="toggle-switch">
@@ -87,8 +94,9 @@
                     </label>
                     <span class="control-label">在番茄钟上显示当前任务</span>
                   </div>
+                  <p v-if="todoTip" class="todo-tip">{{ todoTip }}</p>
                   <transition-group name="todo-list" tag="div" class="todo-list">
-                    <div v-for="todo in todos" :key="todo.id" class="todo-item" :class="{ completed: todo.completed, pinned: todo.pinned }">
+                    <div v-for="todo in sortedTodos" :key="todo.id" class="todo-item" :class="{ completed: todo.completed, pinned: todo.pinned }">
                       <input type="checkbox" :checked="todo.completed" @change="toggleTodo(todo.id)" class="todo-checkbox"/>
                       <span class="todo-text">{{ todo.text }}</span>
                       <button @click="togglePin(todo.id)" class="pin-todo-btn" :class="{ active: todo.pinned }" :title="todo.pinned ? '取消外显' : '设为外显'">
@@ -189,6 +197,11 @@
                       </label>
                     </div>
                   </div>
+                <div class="notification-volume-row">
+                  <label>铃声大小</label>
+                  <input type="range" min="0" max="1" step="0.05" v-model.number="notificationVolume" />
+                  <span class="volume-value">{{ Math.round(notificationVolume * 100) }}%</span>
+                </div>
                 </div>
 
               <div v-else-if="currentTab === 'playlist'" class="playlist-container">
@@ -321,7 +334,7 @@
               </div>
 
               <div v-else-if="currentTab === 'calendar'" key="calendar" class="calendar-data-container">
-                <StudyCalendar />
+                <StudyCalendar @share-countdown="shareCountdownToChat" />
               </div>
 
 
@@ -424,6 +437,16 @@
     @ui-leave="onUIMouseLeave"
   />
 </transition>
+<transition name="fade">
+  <FloatingTodoWindow
+    v-if="isTodoPopped"
+    :todos="todos"
+    @close="closeTodoPopout"
+    @toggle="toggleTodo"
+    @ui-enter="onUIMouseEnter"
+    @ui-leave="onUIMouseLeave"
+  />
+</transition>
 </div>
 </template>
 
@@ -434,15 +457,17 @@
   import { useMusic } from '../composables/useMusic.js'
   import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
   import { useCrossfade } from '../composables/useCrossfade.js'
-  import { getPomodoroSettings, getDefaultPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings, saveTimerSettings } from '../utils/userSettings.js'
+  import { useCountdown } from '../composables/useCountdown.js'
+  import { getPomodoroSettings, getDefaultPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings, saveTimerSettings, saveNotificationVolume } from '../utils/userSettings.js'
   import { recommendPlaylists, LATEST_PLAYLIST_VERSION } from '../data/playlists.js'
-  import { buildMusicShareMessage } from '../data/musicShare.js'
+  import { buildMusicShareMessage, buildCountdownShareMessage } from '../data/musicShare.js'
   import { LATEST_UPDATE_VERSION } from '../data/updates.js'
   import { getRandomQuote } from '../data/quotes.js'
   import Updates from './Updates.vue'
   import StudyCalendar from './StudyCalendar.vue'
   import ChatPanel from './ChatPanel.vue'
   import FloatingChatWindow from './FloatingChatWindow.vue'
+  import FloatingTodoWindow from './FloatingTodoWindow.vue'
   import { useStudyAuth, getTokenUserId } from '../composables/useStudyAuth.js'
   import { useStudySync } from '../composables/useStudySync.js'
   import { useCalendar } from '../composables/useCalendar.js'
@@ -475,6 +500,7 @@ const { onlineCount, adminOnline, isConnected, isAuthenticated, messages, chatEr
 const { profiles: userProfiles, ensureProfiles } = useUserProfiles()
 const { playlistId, platform, bitrate, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS, BITRATE_OPTIONS, setBitrate } = useMusic()
 const { syncStatus, lastSyncTime, fetchRemoteData, syncOnLogin, pushCalendar, fetchCalendar, pushAll } = useStudySync()
+const { countdowns, addCountdown, deleteCountdown, setCountdowns } = useCountdown()
 const { crossfadeEnabled, toggleCrossfade, fadeMusicOut, fadeMusicIn } = useCrossfade()
 const { recordStudyTime: calendarRecordStudy, recordPomodoro: calendarRecordPomodoro, getCalendarData, setCalendarData } = useCalendar()
 
@@ -489,6 +515,16 @@ const openChatPopout = () => {
 const closeChatPopout = () => {
   isChatPopped.value = false
   localStorage.setItem(CHAT_POPOUT_KEY, '0')
+}
+const TODO_POPOUT_KEY = 'study_floating_todo_enabled'
+const isTodoPopped = ref(localStorage.getItem(TODO_POPOUT_KEY) === '1')
+const openTodoPopout = () => {
+  isTodoPopped.value = true
+  localStorage.setItem(TODO_POPOUT_KEY, '1')
+}
+const closeTodoPopout = () => {
+  isTodoPopped.value = false
+  localStorage.setItem(TODO_POPOUT_KEY, '0')
 }
 let syncToastTimer = null
 const syncToastSubtitle = ref('欢迎回来！Miku 等你许久了 >﹏<')
@@ -546,19 +582,20 @@ const reLogin = () => {
 }
 
 let pushTimeout = null
+const withCountdownsSettings = () => ({ ...getPomodoroSettings(), countdowns: countdowns.value })
 const triggerSync = () => {
   if (!isLoggedIn.value) return
   if (isLocalStudyOwnerMismatch()) return
   if (pushTimeout) clearTimeout(pushTimeout)
   pushTimeout = setTimeout(() => {
-    pushAll(studyStats, todos.value, getPomodoroSettings(), getCalendarData())
+    pushAll(studyStats, todos.value, withCountdownsSettings(), getCalendarData())
   }, 2000)
 }
 
 const manualSync = async () => {
   if (!isLoggedIn.value) return
   if (isLocalStudyOwnerMismatch()) return
-  await pushAll(studyStats, todos.value, getPomodoroSettings(), getCalendarData())
+  await pushAll(studyStats, todos.value, withCountdownsSettings(), getCalendarData())
 }
 
 const applyRemoteData = (remote) => {
@@ -575,7 +612,8 @@ const applyRemoteData = (remote) => {
     hidePomodoroOnIdle.value = settings.hidePomodoroOnIdle
     showHitokoto.value = settings.showHitokoto
     timerMode.value = settings.timerMode || 'pomodoro'
-    pomodoroCount.value = settings.pomodoroCount || 4
+    pomodoroCount.value = clampPomodoroCount(settings.pomodoroCount)
+    if (Array.isArray(settings.countdowns)) setCountdowns(settings.countdowns)
   }
   markLocalStudyOwner()
 }
@@ -679,11 +717,32 @@ const currentTodo = computed(() => {
   const uncompletedTodos = todos.value.filter(t => !t.completed)
   return uncompletedTodos[uncompletedTodos.length - 1]
 })
-const saveTodos = (sync = true) => { markLocalStudyOwner(); localStorage.setItem(TODOS_KEY, JSON.stringify(todos.value)); if (sync) triggerSync() }
+const sortedTodos = computed(() => [
+  ...todos.value.filter(t => !t.completed),
+  ...todos.value.filter(t => t.completed),
+])
+const saveTodos = (sync = true) => {
+  markLocalStudyOwner()
+  try { localStorage.setItem(TODOS_KEY, JSON.stringify(todos.value)) } catch (e) { console.warn('保存待办失败', e) }
+  if (sync) triggerSync()
+}
 const saveShowTodoOnClock = () => localStorage.setItem(SHOW_TODO_KEY, showTodoOnClock.value.toString())
+const MAX_TODOS = 200
+const todoTip = ref('')
+let todoTipTimer = null
+const showTodoTip = (text) => {
+  todoTip.value = text
+  clearTimeout(todoTipTimer)
+  todoTipTimer = setTimeout(() => { todoTip.value = '' }, 2500)
+}
 const addTodo = () => {
-  if (!newTodoText.value.trim()) return
-  todos.value.unshift({ id: Date.now(), text: newTodoText.value.trim(), completed: false, pinned: false })
+  const text = newTodoText.value.trim().slice(0, 200)
+  if (!text) return
+  if (todos.value.length >= MAX_TODOS) {
+    showTodoTip(`最多添加 ${MAX_TODOS} 条待办`)
+    return
+  }
+  todos.value.unshift({ id: Date.now(), text, completed: false, pinned: false })
   newTodoText.value = ''
   saveTodos()
 }
@@ -774,6 +833,14 @@ const shareCurrentSong = () => {
   }
 }
 
+const shareCountdownToChat = (c) => {
+  if (!c || !c.title || !c.date) return
+  const payload = buildCountdownShareMessage({ title: c.title, date: c.date })
+  if (payload && sendChatMessage(payload)) {
+    triggerSyncToastText('已分享到聊天室', '')
+  }
+}
+
 const findSongIndex = (list, songIndex, songName) => {
   if (songIndex >= 0 && songIndex < list.length) {
     if (!songName || list[songIndex].name === songName) return songIndex
@@ -833,7 +900,13 @@ const pauseMusicDuringBreak = ref(savedPomodoro.pauseMusicDuringBreak ?? false)
 const hidePomodoroOnIdle = ref(savedPomodoro.hidePomodoroOnIdle || false)
 const showHitokoto = ref(savedPomodoro.showHitokoto || false)
 const timerMode = ref(savedPomodoro.timerMode || 'pomodoro')
-const pomodoroCount = ref(savedPomodoro.pomodoroCount || 4)
+const clampPomodoroCount = (n) => {
+  const v = Math.floor(Number(n))
+  if (!Number.isFinite(v) || v < 1) return 4
+  return Math.min(v, 8)
+}
+const pomodoroCount = ref(clampPomodoroCount(savedPomodoro.pomodoroCount))
+const notificationVolume = ref(savedPomodoro.notificationVolume ?? 0.6)
 const stopwatchElapsed = ref(0)
 let stopwatchBase = 0
 const timeLeft = ref(focusDuration.value * 60)
@@ -942,7 +1015,13 @@ watch(showHitokoto, () => {
     showHitokotoAnimation.value = true
   }
 })
-watch(pomodoroCount, () => { saveTimerSettings(timerMode.value, pomodoroCount.value); triggerSync() })
+watch(pomodoroCount, (v) => {
+  const c = clampPomodoroCount(v)
+  if (c !== v) { pomodoroCount.value = c; return }
+  saveTimerSettings(timerMode.value, c)
+  triggerSync()
+})
+watch(notificationVolume, () => { saveNotificationVolume(notificationVolume.value) })
 
 const rotateHitokoto = () => {
   showHitokotoAnimation.value = false
@@ -1049,7 +1128,7 @@ const preloadNotificationAudio = () => {
     preloadedAudio.volume = 0
     preloadedAudio.currentTime = 0
     const p = preloadedAudio.play()
-    if (p) p.then(() => { preloadedAudio.pause(); preloadedAudio.currentTime = 0; preloadedAudio.volume = 1 }).catch(() => {})
+    if (p) p.then(() => { preloadedAudio.pause(); preloadedAudio.currentTime = 0; preloadedAudio.volume = notificationVolume.value }).catch(() => {})
   } catch (e) {}
 }
 const startTimer = () => {
@@ -1132,15 +1211,19 @@ const switchMode = (mode) => {
   }
 }
 const playNotificationSound = () => {
+  const volume = notificationVolume.value
+  const playAt = (audio) => {
+    audio.currentTime = 0
+    audio.volume = volume
+    audio.play().catch(() => {})
+  }
   if (!isPageVisible()) {
     try {
       if (preloadedAudio) {
-        preloadedAudio.currentTime = 0
-        preloadedAudio.volume = 1
-        preloadedAudio.play().catch(() => {})
+        playAt(preloadedAudio)
       } else {
         const audio = new Audio('/BreakOrWork.mp3')
-        audio.play().catch(() => {})
+        playAt(audio)
       }
     } catch (e) {}
     return
@@ -1151,12 +1234,10 @@ const playNotificationSound = () => {
   setTimeout(() => {
     try {
       if (preloadedAudio) {
-        preloadedAudio.currentTime = 0
-        preloadedAudio.volume = 1
-        preloadedAudio.play().catch(() => {})
+        playAt(preloadedAudio)
       } else {
         const audio = new Audio('/BreakOrWork.mp3')
-        audio.play().catch(() => {})
+        playAt(audio)
       }
     } catch (e) {}
   }, 200)
@@ -1188,7 +1269,7 @@ onMounted(async () => {
       clearTokenUserChanged()
     } else {
       if (!getLocalStudyOwnerId()) markLocalStudyOwner()
-      const { autoMerged, applyRemote } = await syncOnLogin(studyStats, todos.value, getPomodoroSettings())
+      const { autoMerged, applyRemote } = await syncOnLogin(studyStats, todos.value, withCountdownsSettings())
       if (applyRemote) applyRemoteData(applyRemote)
       if (autoMerged) triggerSyncToast()
       const remoteCalendar = await fetchCalendar()
@@ -1238,6 +1319,7 @@ onUnmounted(() => {
   if (timeInterval) clearInterval(timeInterval)
   if (hitokotoInterval) clearInterval(hitokotoInterval)
   if (syncToastTimer) { clearTimeout(syncToastTimer); syncToastTimer = null }
+  if (todoTipTimer) clearTimeout(todoTipTimer)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 const handleVisibilityChange = () => {
@@ -1595,6 +1677,9 @@ const handleVisibilityChange = () => {
 }
 
 .timer-settings { position: relative; margin-bottom: 1rem; }
+.notification-volume-row { display: flex; align-items: center; gap: 0.6rem; font-size: 0.8rem; padding: 0.4rem 0; color: rgba(255, 255, 255, 0.85); }
+.notification-volume-row input[type="range"] { flex: 1; min-width: 0; accent-color: #ff6b6b; cursor: pointer; }
+.volume-value { width: 40px; text-align: right; font-size: 0.78rem; color: rgba(255, 255, 255, 0.7); flex-shrink: 0; }
 .toggle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; margin-top: 0.5rem; }
 .toggle-item { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; padding: 0.3rem 0; }
 .toggle-item label:first-child { opacity: 0.8; white-space: nowrap; }
@@ -1764,7 +1849,9 @@ const handleVisibilityChange = () => {
 .settings-slide-leave-to { opacity: 0; transform: scale(1.02); }
 
 .todos-container { color: white; padding: 1rem 0; }
+.todo-popout-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 0.6rem 0.7rem; }
 .todo-input-group { display: flex; gap: 0.8rem; margin-bottom: 1.5rem; }
+.todo-tip { margin: -1rem 0 1rem; font-size: 0.75rem; color: rgba(255, 193, 7, 0.9); }
 .todo-display-control { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1.5rem; padding: 0.8rem 1rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; }
 .control-label { font-size: 0.9rem; color: rgba(255, 255, 255, 0.9); }
 .todo-input { flex: 1; padding: 0.6rem 1rem; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: white; font-size: 0.9rem; transition: all 0.3s ease; }
@@ -1772,6 +1859,7 @@ const handleVisibilityChange = () => {
 @media (max-width: 768px) {
   .todo-input-group { flex-direction: column; gap: 0.6rem; }
   .add-todo-btn { width: 100%; }
+  .todo-popout-toggle { width: 100%; }
   .todo-display-control { flex-direction: column; align-items: flex-start; gap: 0.6rem; }
 }
 .todo-input:focus { outline: none; border-color: rgba(41, 128, 185, 0.6); background: rgba(255, 255, 255, 0.12); box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.1); }
