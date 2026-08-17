@@ -149,15 +149,15 @@
                   <div v-if="timerMode === 'pomodoro'" key="pomodoro-settings" class="timer-settings">
                     <div class="setting-group">
                       <label>专注时间(分钟)</label>
-                      <input type="number" v-model.number="focusDuration" min="1" max="60" :disabled="isRunning"/>
+                      <input type="number" v-model.number="focusDuration" min="1" max="100" :disabled="isRunning" @blur="onBlurFocusDuration"/>
                     </div>
                     <div class="setting-group">
                       <label>休息时间(分钟)</label>
-                      <input type="number" v-model.number="breakDuration" min="1" max="30" :disabled="isRunning"/>
+                      <input type="number" v-model.number="breakDuration" min="1" max="100" :disabled="isRunning" @blur="onBlurBreakDuration"/>
                     </div>
                     <div class="setting-group">
                       <label>番茄个数</label>
-                      <input type="number" v-model.number="pomodoroCount" min="1" max="8" :disabled="isRunning"/>
+                      <input type="number" v-model.number="pomodoroCount" min="1" max="20" :disabled="isRunning" @blur="onBlurPomodoroCount"/>
                     </div>
                     <div class="pomodoro-count">
                       <span class="count-label">已完成番茄:</span>
@@ -903,9 +903,16 @@ const timerMode = ref(savedPomodoro.timerMode || 'pomodoro')
 const clampPomodoroCount = (n) => {
   const v = Math.floor(Number(n))
   if (!Number.isFinite(v) || v < 1) return 4
-  return Math.min(v, 8)
+  return Math.min(v, 20)
 }
 const pomodoroCount = ref(clampPomodoroCount(savedPomodoro.pomodoroCount))
+const normalizeOnBlur = (field, fallback, max = 100) => () => {
+  const v = Math.floor(Number(field.value))
+  field.value = Number.isFinite(v) && v >= 1 ? Math.min(v, max) : fallback
+}
+const onBlurFocusDuration = normalizeOnBlur(focusDuration, 25)
+const onBlurBreakDuration = normalizeOnBlur(breakDuration, 5)
+const onBlurPomodoroCount = normalizeOnBlur(pomodoroCount, 4, 20)
 const notificationVolume = ref(savedPomodoro.notificationVolume ?? 0.6)
 const stopwatchElapsed = ref(0)
 let stopwatchBase = 0
@@ -1016,6 +1023,7 @@ watch(showHitokoto, () => {
   }
 })
 watch(pomodoroCount, (v) => {
+  if (v === '' || v === null) return
   const c = clampPomodoroCount(v)
   if (c !== v) { pomodoroCount.value = c; return }
   saveTimerSettings(timerMode.value, c)
@@ -1686,6 +1694,7 @@ const handleVisibilityChange = () => {
 .setting-group { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; font-size: 0.8rem; }
 .setting-group label { opacity: 0.8; }
 .setting-group input[type="number"] { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 0.2rem 0.4rem; color: white; width: 50px; text-align: center; }
+.setting-group input[type="number"]::-webkit-inner-spin-button { opacity: 1; }
 .setting-group input[type="number"]:focus { outline: none; border-color: rgba(255, 255, 255, 0.6); }
 .setting-group input[type="number"]:disabled { opacity: 0.5; }
 .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; margin: 0; }

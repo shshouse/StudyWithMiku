@@ -52,8 +52,8 @@ export const savePomodoroSettings = (focusDuration, breakDuration, pauseMusicDur
   const settings = getSettings()
   settings.pomodoro = {
     ...settings.pomodoro,
-    focusDuration: clampInt(focusDuration, 25, 1, 60),
-    breakDuration: clampInt(breakDuration, 5, 1, 30),
+    focusDuration: clampInt(focusDuration, 25, 1, 100),
+    breakDuration: clampInt(breakDuration, 5, 1, 100),
     pauseMusicDuringBreak,
     hidePomodoroOnIdle,
     showHitokoto,
@@ -80,7 +80,7 @@ export const saveMusicPauseSettings = (pauseMusicDuringBreak, hidePomodoroOnIdle
 export const saveTimerSettings = (timerMode, pomodoroCount) => {
   const settings = getSettings()
   settings.pomodoro.timerMode = timerMode
-  settings.pomodoro.pomodoroCount = clampInt(pomodoroCount, 4, 1, 8)
+  settings.pomodoro.pomodoroCount = clampInt(pomodoroCount, 4, 1, 20)
   saveSettings(settings)
 }
 
