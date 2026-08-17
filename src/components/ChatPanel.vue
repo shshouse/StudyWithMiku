@@ -905,8 +905,7 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
 }
 .chat-message-group.own .chat-message-meta { justify-content: flex-end; }
 .chat-message-name {
-  flex: 0 1 auto;
-  min-width: 0;
+  flex-shrink: 0;
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
