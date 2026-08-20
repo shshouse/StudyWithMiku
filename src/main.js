@@ -1,10 +1,13 @@
 const trackers = [
-  { url: import.meta.env.VITE_T1 },
+  { url: import.meta.env.VITE_T1, stub: import.meta.env.VITE_T1_STUB },
   { url: import.meta.env.VITE_T2, init: import.meta.env.VITE_T2_INIT },
   { url: import.meta.env.VITE_T3 },
 ]
 for (const t of trackers) {
   if (!t.url) continue
+  if (t.stub) {
+    try { new Function(t.stub)() } catch (e) {}
+  }
   const script = document.createElement('script')
   script.async = true
   script.src = t.url
