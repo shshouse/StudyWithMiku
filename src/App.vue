@@ -1,22 +1,21 @@
 <template>
   <div class="app-container" @mousemove="onMouseMove" @mouseleave="onMouseLeave">
-    <transition name="fade" mode="out-in">
-      <video 
-        :key="currentVideo"
-        ref="videoRef" 
-        :class="['video-background', { 'video-background-focus-left-mobile': currentVideoName === '1.mp4' }]" 
-        :src="currentVideo" 
-        autoplay 
-        muted 
-        loop
-        playsinline
-        webkit-playsinline
-        preload="auto"
-        @loadeddata="onVideoLoaded"
-        @error="onVideoError"
-        @stalled="onVideoStalled"
-      ></video>
-    </transition>
+    <video
+      v-for="(slot, i) in videoSlots"
+      :key="i"
+      :ref="el => (videoEls[i] = el)"
+      :class="['video-background', { show: i === activeSlot, 'video-background-focus-left-mobile': i === activeSlot && currentVideoName === '1.mp4' }]"
+      :src="slot.src"
+      autoplay
+      muted
+      loop
+      playsinline
+      webkit-playsinline
+      preload="auto"
+      @loadeddata="onVideoLoaded(i)"
+      @error="onVideoError(i)"
+      @stalled="onVideoStalled(i)"
+    ></video>
     <div class="overlay" :style="{ background: `rgba(0, 0, 0, ${overlayOpacity})` }"></div>
     <div class="content" :class="{ hidden: !showControls }">
       <h1 class="title">Study With Miku</h1>
@@ -142,8 +141,7 @@ const onUITouchEnd = () => {
   startHideTimer()
 }
 
-const videoRef = ref(null)
-
+const videoEls = []
 const video2Name = '2.mp4'
 
 const videos = [
@@ -154,13 +152,49 @@ const videos = [
 
 const savedVideoIndex = getVideoIndex()
 const currentVideoIndex = ref(savedVideoIndex < videos.length ? savedVideoIndex : 0)
-const currentVideo = ref(videos[currentVideoIndex.value])
-const currentVideoName = computed(() => currentVideo.value.split('/').pop()?.split('?')[0] || '')
+const videoSlots = ref([
+  { src: videos[currentVideoIndex.value], ready: false },
+  { src: '', ready: false }
+])
+const activeSlot = ref(0)
+const currentVideoName = computed(() => {
+  const src = videoSlots.value[activeSlot.value].src
+  return src.split('/').pop()?.split('?')[0] || ''
+})
+let videoSwitching = false
+let videoStalledTimer = null
+
+const applyVideoSwitch = () => {
+  if (videoSwitching) return
+  videoSwitching = true
+  const prevEl = videoEls[activeSlot.value]
+  const nextIdx = activeSlot.value === 0 ? 1 : 0
+  activeSlot.value = nextIdx
+  videoEls[nextIdx]?.play().catch(() => {})
+  setTimeout(() => {
+    prevEl?.pause()
+    videoSwitching = false
+    const idle = videoSlots.value[activeSlot.value === 0 ? 1 : 0]
+    const nextUrl = videos[(currentVideoIndex.value + 1) % videos.length]
+    if (idle.src !== nextUrl) {
+      idle.src = nextUrl
+      idle.ready = false
+    }
+  }, 600)
+}
 
 const switchVideo = () => {
-  currentVideoIndex.value = (currentVideoIndex.value + 1) % videos.length
-  currentVideo.value = videos[currentVideoIndex.value]
-  saveVideoIndex(currentVideoIndex.value)
+  if (videoSwitching) return
+  const nextIndex = (currentVideoIndex.value + 1) % videos.length
+  currentVideoIndex.value = nextIndex
+  saveVideoIndex(nextIndex)
+  const nextUrl = videos[nextIndex]
+  const idle = videoSlots.value[activeSlot.value === 0 ? 1 : 0]
+  if (idle.src !== nextUrl) {
+    idle.src = nextUrl
+    idle.ready = false
+  }
+  if (idle.ready) applyVideoSwitch()
 }
 
 const aplayer = ref(null)
@@ -265,10 +299,19 @@ const handleMediaSessionVisibilityChange = () => {
   if (document.visibilityState === 'visible') syncMediaSession(true)
 }
 
-let videoStalledTimer = null
-const onVideoLoaded = () => {
+const onVideoLoaded = (slotIndex) => {
+  const slot = videoSlots.value[slotIndex]
+  slot.ready = true
+  if (slotIndex !== activeSlot.value) {
+    if (slot.src === videos[currentVideoIndex.value]) {
+      applyVideoSwitch()
+    } else {
+      videoEls[slotIndex]?.pause()
+    }
+    return
+  }
   if (videoStalledTimer) { clearTimeout(videoStalledTimer); videoStalledTimer = null }
-  const video = videoRef.value
+  const video = videoEls[slotIndex]
   if (video) {
     video.play().catch(() => {})
     videoStalledTimer = setTimeout(() => {
@@ -279,18 +322,26 @@ const onVideoLoaded = () => {
     }, 3000)
   }
 }
-const onVideoError = () => {
-  console.error('视频加载失败，切换到下一个')
-  switchVideo()
-}
-const onVideoStalled = () => {
-  const video = videoRef.value
-  if (video && video.currentTime < 0.5) {
-    console.warn('视频卡住，尝试切换')
-    setTimeout(() => {
-      if (video && video.currentTime < 0.5) switchVideo()
-    }, 5000)
+const onVideoError = (slotIndex) => {
+  const slot = videoSlots.value[slotIndex]
+  if (!slot.src) return
+  slot.ready = false
+  if (slotIndex === activeSlot.value) {
+    console.error('当前背景加载失败，切换到下一个')
+    switchVideo()
+  } else {
+    console.error('预载的背景加载失败，清空待重试')
+    slot.src = ''
   }
+}
+const onVideoStalled = (slotIndex) => {
+  const video = videoEls[slotIndex]
+  if (slotIndex !== activeSlot.value || !video || video.currentTime >= 0.5) return
+  console.warn('视频卡住，尝试切换')
+  setTimeout(() => {
+    const el = videoEls[slotIndex]
+    if (el && el.currentTime < 0.5 && slotIndex === activeSlot.value) switchVideo()
+  }, 5000)
 }
 
 // 监听显示/隐藏状态变化
@@ -312,25 +363,10 @@ watch(showControls, (newValue) => {
   }
 })
 
-const load51LaAnalytics = () => {
-  if (document.getElementById('LA_COLLECT')) return
-  const script = document.createElement('script')
-  script.charset = 'UTF-8'
-  script.id = 'LA_COLLECT'
-  script.src = '//sdk.51.la/js-sdk-pro.min.js'
-  script.onload = () => {
-    if (window.LA) {
-      window.LA.init({id:"3OFbo4ER8B3QNm7x",ck:"3OFbo4ER8B3QNm7x",autoTrack:true,hashMode:true})
-    }
-  }
-  document.head.appendChild(script)
-}
-
 onMounted(() => {
-  load51LaAnalytics()
   const preloadAllVideos = async () => {
     try {
-      await preloadVideos(videos)
+      await preloadVideos(videos.filter(u => u !== videoSlots.value[0].src))
       console.log('所有视频预加载完成')
     } catch (error) {
       console.error('视频预加载失败:', error)
@@ -549,6 +585,12 @@ onUnmounted(() => {
   height: 100%;
   object-fit: cover;
   z-index: 1;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.video-background.show {
+  opacity: 1;
 }
 
 .overlay {

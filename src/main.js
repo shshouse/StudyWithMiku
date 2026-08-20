@@ -1,8 +1,18 @@
-if (import.meta.env.VITE_ANALYTICS_URL && import.meta.env.VITE_ANALYTICS_ID) {
+const trackers = [
+  { url: import.meta.env.VITE_T1 },
+  { url: import.meta.env.VITE_T2, init: import.meta.env.VITE_T2_INIT },
+  { url: import.meta.env.VITE_T3 },
+]
+for (const t of trackers) {
+  if (!t.url) continue
   const script = document.createElement('script')
-  script.defer = true
-  script.src = import.meta.env.VITE_ANALYTICS_URL
-  script.dataset.websiteId = import.meta.env.VITE_ANALYTICS_ID
+  script.async = true
+  script.src = t.url
+  if (t.init) {
+    script.onload = () => {
+      try { new Function(t.init)() } catch (e) {}
+    }
+  }
   document.head.appendChild(script)
 }
 
