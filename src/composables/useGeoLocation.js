@@ -99,13 +99,6 @@ const API_LIST = [
     if (!d.success) return null
     return resolveLocation(d.country_code, d.region, d.country)
   },
-  async () => {
-    const res = await fetch('https://api.ip2location.io/')
-    if (!res.ok) return null
-    const d = await res.json()
-    if (d.message) return null
-    return resolveLocation(d.country_code, d.region_name, d.country_name)
-  },
 ]
 
 export function useGeoLocation() {
