@@ -4,7 +4,7 @@
       v-for="(slot, i) in videoSlots"
       :key="i"
       :ref="el => (videoEls[i] = el)"
-      :class="['video-background', { show: i === activeSlot, 'video-background-focus-left-mobile': i === activeSlot && currentVideoName === '1.mp4' }]"
+      :class="['video-background', { show: i === shownSlot, 'video-background-focus-left-mobile': i === shownSlot && currentVideoName === '1.mp4' }]"
       :src="slot.src"
       autoplay
       muted
@@ -157,6 +157,8 @@ const videoSlots = ref([
   { src: '', ready: false }
 ])
 const activeSlot = ref(0)
+const shownSlot = ref(0)
+const VIDEO_FADE_MS = 400
 const currentVideoName = computed(() => {
   const src = videoSlots.value[activeSlot.value].src
   return src.split('/').pop()?.split('?')[0] || ''
@@ -167,20 +169,25 @@ let videoStalledTimer = null
 const applyVideoSwitch = () => {
   if (videoSwitching) return
   videoSwitching = true
-  const prevEl = videoEls[activeSlot.value]
-  const nextIdx = activeSlot.value === 0 ? 1 : 0
+  const prevIdx = activeSlot.value
+  const nextIdx = prevIdx === 0 ? 1 : 0
+  const prevEl = videoEls[prevIdx]
   activeSlot.value = nextIdx
-  videoEls[nextIdx]?.play().catch(() => {})
+  shownSlot.value = -1
   setTimeout(() => {
     prevEl?.pause()
-    videoSwitching = false
-    const idle = videoSlots.value[activeSlot.value === 0 ? 1 : 0]
-    const nextUrl = videos[(currentVideoIndex.value + 1) % videos.length]
-    if (idle.src !== nextUrl) {
-      idle.src = nextUrl
-      idle.ready = false
-    }
-  }, 600)
+    shownSlot.value = nextIdx
+    videoEls[nextIdx]?.play().catch(() => {})
+    setTimeout(() => {
+      videoSwitching = false
+      const idle = videoSlots.value[activeSlot.value === 0 ? 1 : 0]
+      const nextUrl = videos[(currentVideoIndex.value + 1) % videos.length]
+      if (idle.src !== nextUrl) {
+        idle.src = nextUrl
+        idle.ready = false
+      }
+    }, VIDEO_FADE_MS)
+  }, VIDEO_FADE_MS)
 }
 
 const switchVideo = () => {
@@ -586,7 +593,7 @@ onUnmounted(() => {
   object-fit: cover;
   z-index: 1;
   opacity: 0;
-  transition: opacity 0.5s ease;
+  transition: opacity 0.4s ease;
 }
 
 .video-background.show {
