@@ -114,6 +114,7 @@
                 <div class="mode-switcher">
                   <div class="mode-indicator" :class="timerMode"></div>
                   <button class="mode-btn" :class="{ active: timerMode === 'pomodoro' }" @click="switchMode('pomodoro')">番茄钟</button>
+                  <button class="mode-btn" :class="{ active: timerMode === 'countdown' }" @click="switchMode('countdown')">倒计时</button>
                   <button class="mode-btn" :class="{ active: timerMode === 'stopwatch' }" @click="switchMode('stopwatch')">计时器</button>
                 </div>
                 <div class="timer-main-row">
@@ -121,7 +122,7 @@
                     <div class="time-circle">
                       <svg class="progress-ring" viewBox="0 0 120 120">
                         <circle class="progress-ring-background" cx="60" cy="60" r="54" stroke="rgba(255, 255, 255, 0.2)" stroke-width="5" fill="transparent"/>
-                        <circle v-if="timerMode === 'pomodoro'" class="progress-ring-fill" :class="statusClass" cx="60" cy="60" r="54" stroke="currentColor" stroke-width="5" fill="transparent" :stroke-dasharray="circumference" :stroke-dashoffset="strokeDashoffset" transform="rotate(-90 60 60)"/>
+                        <circle v-if="timerMode !== 'stopwatch'" class="progress-ring-fill" :class="statusClass" cx="60" cy="60" r="54" stroke="currentColor" stroke-width="5" fill="transparent" :stroke-dasharray="circumference" :stroke-dashoffset="strokeDashoffset" transform="rotate(-90 60 60)"/>
                       </svg>
                       <transition name="time-pop">
                         <div class="time-text" :key="timerMode">
@@ -139,7 +140,7 @@
                       </transition>
                     </div>
                     <div class="timer-controls">
-                      <button v-if="!isRunning" class="control-btn start-btn" @click="startTimer" :disabled="timerMode === 'pomodoro' && timeLeft <= 0"><span class="btn-icon">▶</span></button>
+                      <button v-if="!isRunning" class="control-btn start-btn" @click="startTimer" :disabled="timerMode !== 'stopwatch' && timeLeft <= 0"><span class="btn-icon">▶</span></button>
                       <button v-else class="control-btn pause-btn" @click="pauseTimer"><span class="btn-icon">⏸</span></button>
                       <button class="control-btn reset-btn" @click="resetTimer"><span class="btn-icon">↺</span></button>
                     </div>
@@ -149,11 +150,11 @@
                   <div v-if="timerMode === 'pomodoro'" key="pomodoro-settings" class="timer-settings">
                     <div class="setting-group">
                       <label>专注时间(分钟)</label>
-                      <input type="number" v-model.number="focusDuration" min="1" max="100" :disabled="isRunning" @blur="onBlurFocusDuration"/>
+                      <input type="number" v-model.number="focusDuration" min="0.1" max="100" step="0.1" :disabled="isRunning" @blur="onBlurFocusDuration"/>
                     </div>
                     <div class="setting-group">
                       <label>休息时间(分钟)</label>
-                      <input type="number" v-model.number="breakDuration" min="1" max="100" :disabled="isRunning" @blur="onBlurBreakDuration"/>
+                      <input type="number" v-model.number="breakDuration" min="0.1" max="100" step="0.1" :disabled="isRunning" @blur="onBlurBreakDuration"/>
                     </div>
                     <div class="setting-group">
                       <label>番茄个数</label>
@@ -164,6 +165,12 @@
                       <div class="count-display">
                         <span v-for="i in pomodoroCount" :key="i" class="pomodoro-dot" :class="{ filled: completedPomodoros % pomodoroCount >= i }"></span>
                       </div>
+                    </div>
+                  </div>
+                  <div v-else-if="timerMode === 'countdown'" key="countdown-settings" class="timer-settings">
+                    <div class="setting-group">
+                      <label>倒计时(分钟)</label>
+                      <input type="number" v-model.number="countdownDuration" min="0.1" max="600" step="0.1" :disabled="isRunning" @blur="onBlurCountdownDuration"/>
                     </div>
                   </div>
                 </transition>
@@ -197,7 +204,7 @@
                       </label>
                     </div>
                   </div>
-                <div class="notification-volume-row">
+                <div v-if="timerMode !== 'stopwatch'" class="notification-volume-row">
                   <label>铃声大小</label>
                   <input type="range" min="0" max="1" step="0.05" v-model.number="notificationVolume" />
                   <span class="volume-value">{{ Math.round(notificationVolume * 100) }}%</span>
@@ -906,17 +913,21 @@ const clampPomodoroCount = (n) => {
   return Math.min(v, 20)
 }
 const pomodoroCount = ref(clampPomodoroCount(savedPomodoro.pomodoroCount))
-const normalizeOnBlur = (field, fallback, max = 100) => () => {
-  const v = Math.floor(Number(field.value))
-  field.value = Number.isFinite(v) && v >= 1 ? Math.min(v, max) : fallback
+const normalizeOnBlur = (field, fallback, min, max, round = Math.floor) => () => {
+  const v = round(Number(field.value))
+  field.value = Number.isFinite(v) ? Math.min(Math.max(v, min), max) : fallback
 }
-const onBlurFocusDuration = normalizeOnBlur(focusDuration, 25)
-const onBlurBreakDuration = normalizeOnBlur(breakDuration, 5)
-const onBlurPomodoroCount = normalizeOnBlur(pomodoroCount, 4, 20)
+const roundTo01 = (v) => Math.round(v * 10) / 10
+const onBlurFocusDuration = normalizeOnBlur(focusDuration, 25, 0.1, 100, roundTo01)
+const onBlurBreakDuration = normalizeOnBlur(breakDuration, 5, 0.1, 100, roundTo01)
+const onBlurPomodoroCount = normalizeOnBlur(pomodoroCount, 4, 1, 20)
+const countdownDuration = ref(savedPomodoro.countdownDuration || 10)
+const onBlurCountdownDuration = normalizeOnBlur(countdownDuration, 10, 0.1, 600, roundTo01)
 const notificationVolume = ref(savedPomodoro.notificationVolume ?? 0.6)
 const stopwatchElapsed = ref(0)
 let stopwatchBase = 0
-const timeLeft = ref(focusDuration.value * 60)
+const minToSec = (minutes) => Math.round(minutes * 60)
+const timeLeft = ref(minToSec(focusDuration.value))
 const isRunning = ref(false)
 const currentStatus = ref(STATUS.FOCUS)
 const completedPomodoros = ref(0)
@@ -938,9 +949,9 @@ let hitokotoInterval = null
 let wasMusicPlayingBeforeBreak = false
 const isPageVisible = () => typeof document==='undefined'||document.visibilityState==='visible'
 const getPhaseDuration = (status = currentStatus.value) => {
-  if (status === STATUS.FOCUS) return focusDuration.value * 60
-  if (status === STATUS.LONG_BREAK) return breakDuration.value * 60 * 2
-  return breakDuration.value * 60
+  if (status === STATUS.FOCUS) return minToSec(focusDuration.value)
+  if (status === STATUS.LONG_BREAK) return minToSec(breakDuration.value * 2)
+  return minToSec(breakDuration.value)
 }
 const saveCurrentMusicPauseSettings = () => saveMusicPauseSettings(pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value)
 const recordFocusElapsed = (seconds) => {
@@ -984,6 +995,11 @@ const notifyPhaseComplete = (completedStatus, completedAt) => {
   const statusTextMap = { [STATUS.FOCUS]: '专注', [STATUS.BREAK]: '休息', [STATUS.LONG_BREAK]: '长休' }
   const alertMsg = `${statusTextMap[completedStatus]}已完成！`
   try { if ('Notification' in window && Notification.permission === 'granted') new Notification('番茄钟', { body: alertMsg, icon: '/favicon.ico' }) } catch(e) {}
+}
+const notifyCountdownComplete = (completedAt) => {
+  if (isPageVisible() && completedAt && Date.now() - completedAt > 1500) return
+  playNotificationSound()
+  try { if ('Notification' in window && Notification.permission === 'granted') new Notification('倒计时', { body: '倒计时结束了！', icon: '/favicon.ico' }) } catch(e) {}
 }
 const moveToNextPhase = (completedStatus, completedAt) => {
   if (completedStatus === STATUS.FOCUS) {
@@ -1029,6 +1045,12 @@ watch(pomodoroCount, (v) => {
   saveTimerSettings(timerMode.value, c)
   triggerSync()
 })
+watch(countdownDuration, (v) => {
+  if (v === '' || v === null) return
+  if (timerMode.value === 'countdown' && !isRunning.value) timeLeft.value = minToSec(v)
+  saveTimerSettings(timerMode.value, pomodoroCount.value, v)
+  triggerSync()
+})
 watch(notificationVolume, () => { saveNotificationVolume(notificationVolume.value) })
 
 const setHitokoto = async () => {
@@ -1056,16 +1078,18 @@ const formattedSeconds = computed(() => {
 })
 const statusText = computed(() => {
   if (timerMode.value === 'stopwatch') return isRunning.value ? '计时中' : ''
+  if (timerMode.value === 'countdown') return isRunning.value ? '倒计时' : ''
   return { [STATUS.FOCUS]: '专注', [STATUS.BREAK]: '休息', [STATUS.LONG_BREAK]: '长休' }[currentStatus.value] || '专注'
 })
 const statusClass = computed(() => {
   if (timerMode.value === 'stopwatch') return 'stopwatch'
+  if (timerMode.value === 'countdown') return 'countdown'
   return { [STATUS.FOCUS]: 'focus', [STATUS.BREAK]: 'break', [STATUS.LONG_BREAK]: 'long-break' }[currentStatus.value] || 'focus'
 })
 const circumference = computed(() => 2 * Math.PI * 54)
 const strokeDashoffset = computed(() => {
   if (timerMode.value === 'stopwatch') return 0
-  const totalTime = getPhaseDuration(currentStatus.value)
+  const totalTime = timerMode.value === 'countdown' ? minToSec(countdownDuration.value) : getPhaseDuration(currentStatus.value)
   return circumference.value * (1 - (totalTime - timeLeft.value) / totalTime)
 })
 const toggleSettings = () => { showSettings.value = !showSettings.value }
@@ -1097,6 +1121,24 @@ const timerUpdate = () => {
       flushStudyTimeCounter()
     }
     lastRecordedTimeLeft = elapsedTotal
+    scheduleNextTick()
+    return
+  }
+
+  if (timerMode.value === 'countdown') {
+    const now = Date.now()
+    if (now >= phaseEndTime) {
+      const completedAt = phaseEndTime
+      timeLeft.value = 0
+      lastRecordedTimeLeft = 0
+      isRunning.value = false
+      phaseEndTime = null
+      notifyCountdownComplete(completedAt)
+      return
+    }
+    const remaining = Math.max(0, Math.ceil((phaseEndTime - now) / 1000))
+    timeLeft.value = remaining
+    lastRecordedTimeLeft = remaining
     scheduleNextTick()
     return
   }
@@ -1187,11 +1229,11 @@ const pauseTimer = () => {
   if (phaseEndTime) {
     const remaining = Math.max(0, Math.ceil((phaseEndTime - Date.now()) / 1000))
     const elapsed = Math.max(0, lastRecordedTimeLeft - remaining)
-    if (currentStatus.value === STATUS.FOCUS && elapsed > 0) recordFocusElapsed(elapsed)
+    if (timerMode.value === 'pomodoro' && currentStatus.value === STATUS.FOCUS && elapsed > 0) recordFocusElapsed(elapsed)
     timeLeft.value = remaining
     lastRecordedTimeLeft = remaining
   }
-  if (currentStatus.value === STATUS.FOCUS) flushStudyTimeCounter()
+  if (timerMode.value === 'pomodoro' && currentStatus.value === STATUS.FOCUS) flushStudyTimeCounter()
   if (phaseEndTime) {
     phaseEndTime = null
   }
@@ -1205,7 +1247,12 @@ const resetTimer = () => {
     lastRecordedTimeLeft = 0
     return
   }
-  timeLeft.value = focusDuration.value * 60
+  if (timerMode.value === 'countdown') {
+    timeLeft.value = minToSec(countdownDuration.value)
+    lastRecordedTimeLeft = 0
+    return
+  }
+  timeLeft.value = minToSec(focusDuration.value)
   lastRecordedTimeLeft = 0
   currentStatus.value = STATUS.FOCUS
 }
@@ -1218,8 +1265,11 @@ const switchMode = (mode) => {
     stopwatchElapsed.value = 0
     stopwatchBase = 0
     lastRecordedTimeLeft = 0
+  } else if (mode === 'countdown') {
+    timeLeft.value = minToSec(countdownDuration.value)
+    lastRecordedTimeLeft = 0
   } else {
-    timeLeft.value = focusDuration.value * 60
+    timeLeft.value = minToSec(focusDuration.value)
     lastRecordedTimeLeft = 0
     currentStatus.value = STATUS.FOCUS
     completedPomodoros.value = 0
@@ -1421,6 +1471,7 @@ const handleVisibilityChange = () => {
 .clock-display { font-size: clamp(0.8rem, 3vw, 1.5rem); font-weight: 600; }
 .status-badge { padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.8rem; font-weight: 500; background: rgba(255, 255, 255, 0.1); }
 .status-badge.focus { color: #ff6b6b; }
+.status-badge.countdown { color: #ff9f43; }
 .status-badge.break { color: #4ecdc4; }
 .status-badge.long-break { color: #45b7d1; }
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-width: 1024px) {
@@ -1609,10 +1660,11 @@ const handleVisibilityChange = () => {
 }
 
 .timer-container { text-align: center; color: white; }
-.mode-switcher { position: relative; display: flex; gap: 0; justify-content: center; margin-bottom: 1rem; max-width: 240px; margin-left: auto; margin-right: auto; background: rgba(0, 0, 0, 0.25); border-radius: 22px; padding: 3px; border: 1px solid rgba(255, 255, 255, 0.1); }
-.mode-indicator { position: absolute; left: 3px; top: 3px; bottom: 3px; width: calc(50% - 6px); box-sizing: border-box; border-radius: 20px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.4); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); z-index: 0; }
-.mode-indicator.stopwatch { transform: translateX(calc(100% + 6px)); }
-.mode-btn { position: relative; z-index: 1; flex: 1; padding: 0.4rem 1.2rem; border-radius: 20px; border: none; background: transparent; color: rgba(255, 255, 255, 0.5); font-size: 0.85rem; cursor: pointer; transition: color 0.3s ease; }
+.mode-switcher { position: relative; display: flex; gap: 0; justify-content: center; margin-bottom: 1rem; max-width: 320px; margin-left: auto; margin-right: auto; background: rgba(0, 0, 0, 0.25); border-radius: 22px; padding: 3px; border: 1px solid rgba(255, 255, 255, 0.1); }
+.mode-indicator { position: absolute; left: 3px; top: 3px; bottom: 3px; width: calc((100% - 18px) / 3); box-sizing: border-box; border-radius: 20px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.4); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); z-index: 0; }
+.mode-indicator.countdown { transform: translateX(calc(100% + 6px)); }
+.mode-indicator.stopwatch { transform: translateX(calc(200% + 12px)); }
+.mode-btn { position: relative; z-index: 1; flex: 1; padding: 0.4rem 0.7rem; border-radius: 20px; border: none; background: transparent; color: rgba(255, 255, 255, 0.5); font-size: 0.85rem; cursor: pointer; transition: color 0.3s ease; white-space: nowrap; min-width: 0; }
 .mode-btn:hover { color: rgba(255, 255, 255, 0.85); }
 .mode-btn.active { color: white; }
 
@@ -1629,6 +1681,7 @@ const handleVisibilityChange = () => {
 .status-badge-lg.break { color: #4ecdc4; border-color: rgba(78, 205, 196, 0.3); background: rgba(78, 205, 196, 0.1); }
 .status-badge-lg.long-break { color: #45b7d1; border-color: rgba(69, 183, 209, 0.3); background: rgba(69, 183, 209, 0.1); }
 .status-badge-lg.stopwatch { color: #f9ca24; border-color: rgba(249, 202, 36, 0.3); background: rgba(249, 202, 36, 0.1); }
+.status-badge-lg.countdown { color: #ff9f43; border-color: rgba(255, 159, 67, 0.3); background: rgba(255, 159, 67, 0.1); }
 
 .time-circle { position: relative; width: 120px; height: 120px; }
 .progress-ring { display: block; width: 100%; height: 100%; filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.08)); }
@@ -1637,6 +1690,7 @@ const handleVisibilityChange = () => {
 .progress-ring-fill.break { color: #4ecdc4; }
 .progress-ring-fill.long-break { color: #45b7d1; }
 .progress-ring-fill.stopwatch { color: #f9ca24; }
+.progress-ring-fill.countdown { color: #ff9f43; }
 .time-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: clamp(1.2rem, 3.5vw, 1.8rem); font-weight: 300; font-family: 'Courier New', monospace; white-space: nowrap; }
 
 .timer-controls { display: flex; flex-direction: row; gap: 0.5rem; }

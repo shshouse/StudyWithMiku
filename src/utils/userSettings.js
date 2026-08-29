@@ -9,6 +9,7 @@ const defaultSettings = {
     showHitokoto: true,
     pomodoroCount: 4,
     timerMode: 'pomodoro',
+    countdownDuration: 10,
     notificationVolume: 0.6,
   },
   video: {
@@ -48,12 +49,18 @@ const clampInt = (value, fallback, min, max) => {
   return Math.min(Math.max(v, min), max)
 }
 
+const clampDecimal = (value, fallback, min, max) => {
+  const v = Math.round(Number(value) * 10) / 10
+  if (!Number.isFinite(v)) return fallback
+  return Math.min(Math.max(v, min), max)
+}
+
 export const savePomodoroSettings = (focusDuration, breakDuration, pauseMusicDuringBreak, hidePomodoroOnIdle, showHitokoto) => {
   const settings = getSettings()
   settings.pomodoro = {
     ...settings.pomodoro,
-    focusDuration: clampInt(focusDuration, 25, 1, 100),
-    breakDuration: clampInt(breakDuration, 5, 1, 100),
+    focusDuration: clampDecimal(focusDuration, 25, 0.1, 100),
+    breakDuration: clampDecimal(breakDuration, 5, 0.1, 100),
     pauseMusicDuringBreak,
     hidePomodoroOnIdle,
     showHitokoto,
@@ -77,10 +84,11 @@ export const saveMusicPauseSettings = (pauseMusicDuringBreak, hidePomodoroOnIdle
   saveSettings(settings)
 }
 
-export const saveTimerSettings = (timerMode, pomodoroCount) => {
+export const saveTimerSettings = (timerMode, pomodoroCount, countdownDuration) => {
   const settings = getSettings()
   settings.pomodoro.timerMode = timerMode
   settings.pomodoro.pomodoroCount = clampInt(pomodoroCount, 4, 1, 20)
+  if (countdownDuration !== undefined) settings.pomodoro.countdownDuration = clampDecimal(countdownDuration, 10, 0.1, 600)
   saveSettings(settings)
 }
 
