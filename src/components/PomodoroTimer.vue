@@ -462,7 +462,7 @@
   import { recommendPlaylists, LATEST_PLAYLIST_VERSION } from '../data/playlists.js'
   import { buildMusicShareMessage, buildCountdownShareMessage } from '../data/musicShare.js'
   import { LATEST_UPDATE_VERSION } from '../data/updates.js'
-  import { getRandomQuote } from '../data/quotes.js'
+  import { getRandomQuote, getRandomHitokotoFromApi } from '../data/quotes.js'
   import Updates from './Updates.vue'
   import StudyCalendar from './StudyCalendar.vue'
   import ChatPanel from './ChatPanel.vue'
@@ -1031,10 +1031,17 @@ watch(pomodoroCount, (v) => {
 })
 watch(notificationVolume, () => { saveNotificationVolume(notificationVolume.value) })
 
+const setHitokoto = async () => {
+  currentHitokoto.value = getRandomQuote()
+  if (Math.random() < 0.5) return
+  const quote = await getRandomHitokotoFromApi()
+  if (quote) currentHitokoto.value = quote
+}
+
 const rotateHitokoto = () => {
   showHitokotoAnimation.value = false
   setTimeout(() => {
-    currentHitokoto.value = getRandomQuote()
+    setHitokoto()
     showHitokotoAnimation.value = true
   }, 300)
 }
@@ -1315,7 +1322,7 @@ onMounted(async () => {
     }
   }
 
-  currentHitokoto.value = getRandomQuote()
+  setHitokoto()
   showHitokotoAnimation.value = true
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission()
   timeInterval = setInterval(() => { currentTime.value = new Date() }, 1000)

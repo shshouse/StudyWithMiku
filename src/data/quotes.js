@@ -58,3 +58,18 @@ export const getRandomQuote = () => {
   const index = Math.floor(Math.random() * quotesList.length)
   return quotesList[index]
 }
+
+//一言api，50%概率
+const HITOKOTO_API = 'https://v1.hitokoto.cn/?c=a&c=d&c=i&c=k'
+export const getRandomHitokotoFromApi = async () => {
+  try {
+    const response = await fetch(HITOKOTO_API, { signal: AbortSignal.timeout(5000) })
+    if (!response.ok) return null
+    const data = await response.json()
+    if (!data.hitokoto) return null
+    const source = [data.from_who, data.from && `《${data.from}》`].filter(Boolean).join(' ')
+    return { text: data.hitokoto, source }
+  } catch {
+    return null
+  }
+}
