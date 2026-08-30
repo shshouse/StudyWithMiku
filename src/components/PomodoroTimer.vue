@@ -968,6 +968,7 @@ const flushStudyTimeCounter = () => {
     studyTimeCounter = 0
   }
 }
+const shouldRecordFocus = () => timerMode.value === 'countdown' || (timerMode.value === 'pomodoro' && currentStatus.value === STATUS.FOCUS)
 const clearScheduledTick = () => {
   if (timer) { clearTimeout(timer); timer = null }
 }
@@ -1129,6 +1130,10 @@ const timerUpdate = () => {
     const now = Date.now()
     if (now >= phaseEndTime) {
       const completedAt = phaseEndTime
+      if (lastRecordedTimeLeft > 0) {
+        recordFocusElapsed(lastRecordedTimeLeft)
+        flushStudyTimeCounter()
+      }
       timeLeft.value = 0
       lastRecordedTimeLeft = 0
       isRunning.value = false
@@ -1137,6 +1142,8 @@ const timerUpdate = () => {
       return
     }
     const remaining = Math.max(0, Math.ceil((phaseEndTime - now) / 1000))
+    const elapsed = Math.max(0, lastRecordedTimeLeft - remaining)
+    if (elapsed > 0) recordFocusElapsed(elapsed)
     timeLeft.value = remaining
     lastRecordedTimeLeft = remaining
     scheduleNextTick()
@@ -1229,11 +1236,11 @@ const pauseTimer = () => {
   if (phaseEndTime) {
     const remaining = Math.max(0, Math.ceil((phaseEndTime - Date.now()) / 1000))
     const elapsed = Math.max(0, lastRecordedTimeLeft - remaining)
-    if (timerMode.value === 'pomodoro' && currentStatus.value === STATUS.FOCUS && elapsed > 0) recordFocusElapsed(elapsed)
+    if (shouldRecordFocus() && elapsed > 0) recordFocusElapsed(elapsed)
     timeLeft.value = remaining
     lastRecordedTimeLeft = remaining
   }
-  if (timerMode.value === 'pomodoro' && currentStatus.value === STATUS.FOCUS) flushStudyTimeCounter()
+  if (shouldRecordFocus()) flushStudyTimeCounter()
   if (phaseEndTime) {
     phaseEndTime = null
   }
