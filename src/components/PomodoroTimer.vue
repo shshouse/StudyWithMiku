@@ -620,7 +620,9 @@ const applyRemoteData = (remote) => {
     showHitokoto.value = settings.showHitokoto
     timerMode.value = settings.timerMode || 'pomodoro'
     pomodoroCount.value = clampPomodoroCount(settings.pomodoroCount)
+    countdownDuration.value = settings.countdownDuration || 10
     if (Array.isArray(settings.countdowns)) setCountdowns(settings.countdowns)
+    timeLeft.value = timerMode.value === 'countdown' ? minToSec(countdownDuration.value) : minToSec(focusDuration.value)
   }
   markLocalStudyOwner()
 }
@@ -927,7 +929,7 @@ const notificationVolume = ref(savedPomodoro.notificationVolume ?? 0.6)
 const stopwatchElapsed = ref(0)
 let stopwatchBase = 0
 const minToSec = (minutes) => Math.round(minutes * 60)
-const timeLeft = ref(minToSec(focusDuration.value))
+const timeLeft = ref(timerMode.value === 'countdown' ? minToSec(countdownDuration.value) : minToSec(focusDuration.value))
 const isRunning = ref(false)
 const currentStatus = ref(STATUS.FOCUS)
 const completedPomodoros = ref(0)
@@ -1020,8 +1022,8 @@ const moveToNextPhase = (completedStatus, completedAt) => {
   updateMusicForPhaseTransition(completedStatus, completedAt)
 }
 
-watch(focusDuration, (newVal) => { if (currentStatus.value === STATUS.FOCUS && !isRunning.value) timeLeft.value = getPhaseDuration(STATUS.FOCUS); savePomodoroSettings(newVal, breakDuration.value, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
-watch(breakDuration, (newVal) => { if (currentStatus.value !== STATUS.FOCUS && !isRunning.value) timeLeft.value = getPhaseDuration(currentStatus.value); savePomodoroSettings(focusDuration.value, newVal, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
+watch(focusDuration, (newVal) => { if (timerMode.value === 'pomodoro' && currentStatus.value === STATUS.FOCUS && !isRunning.value) timeLeft.value = getPhaseDuration(STATUS.FOCUS); savePomodoroSettings(newVal, breakDuration.value, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
+watch(breakDuration, (newVal) => { if (timerMode.value === 'pomodoro' && currentStatus.value !== STATUS.FOCUS && !isRunning.value) timeLeft.value = getPhaseDuration(currentStatus.value); savePomodoroSettings(focusDuration.value, newVal, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
 watch([pauseMusicDuringBreak], () => { saveCurrentMusicPauseSettings(); triggerSync() })
 watch(hidePomodoroOnIdle, (newVal) => {
   if (newVal) {
