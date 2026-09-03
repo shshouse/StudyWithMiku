@@ -93,11 +93,14 @@ const resolveLocation = (countryCode, regionName, countryName) => {
 
 const API_LIST = [
   async () => {
-    const res = await fetch('https://ipwho.is/?lang=zh-CN')
+    const res = await fetch('https://myip.ipip.net/json')
     if (!res.ok) return null
     const d = await res.json()
-    if (!d.success) return null
-    return resolveLocation(d.country_code, d.region, d.country)
+    if (d.ret !== 'ok' || !Array.isArray(d.data?.location)) return null
+    const [country, region] = d.data.location
+    if (country !== '中国') return country || null
+    if (['香港', '澳门', '台湾'].includes(region)) return `中国${region}`
+    return region ? resolveLocation('CN', region, country) : '中国'
   },
 ]
 
