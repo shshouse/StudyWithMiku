@@ -8,7 +8,7 @@ export const updates = [
       '3.音乐：优化了切歌间隙的播放状态，防止休眠打断播放',
     ],
     images:[
-      '/update/miku7.jpg',
+      '/update/kemono1.png',
     ]
     },
     {

@@ -20,6 +20,9 @@ let preloadedForIndex = -1
 let fadeAnimationId = null
 let crossfadeEndFallbackTimer = null
 let isCrossfadeListSwitch = false
+let origSetAudio = null
+let seamlessReadyAudio = null
+let seamlessReadyUrl = ''
 
 export const useCrossfade = () => {
   const toggleCrossfade = (val) => {
@@ -74,6 +77,15 @@ export const useCrossfade = () => {
     }
   }
 
+  const destroySeamlessReady = () => {
+    if (seamlessReadyAudio) {
+      seamlessReadyAudio.pause()
+      seamlessReadyAudio.src = ''
+      seamlessReadyAudio = null
+      seamlessReadyUrl = ''
+    }
+  }
+
   const cleanup = (ap, onMediaSessionSync) => {
     if (crossfadeAnimationId) {
       cancelAnimationFrame(crossfadeAnimationId)
@@ -84,6 +96,7 @@ export const useCrossfade = () => {
     destroyCrossfadeAudio()
     destroyHandoffAudio()
     destroyPreloadedAudio()
+    destroySeamlessReady()
     isHandingOff = false
     setPlayerVolume(ap, targetVolume)
     isCrossfading = false
@@ -104,6 +117,53 @@ export const useCrossfade = () => {
       origTrigger(event, data)
     }
   }
+
+  const interceptSetAudio = (ap, onMediaSessionSync) => {
+    if (origSetAudio) return
+    origSetAudio = ap.setAudio.bind(ap)
+    ap.setAudio = (nextAudio) => {
+      const main = ap.audio
+      const nextUrl = nextAudio?.url
+      const canSeamless =
+        seamlessEnabled() &&
+        main && !main.paused && nextUrl &&
+        seamlessReadyAudio && seamlessReadyUrl === nextUrl && seamlessReadyAudio.readyState >= 2
+      if (!canSeamless) {
+        origSetAudio(nextAudio)
+        return
+      }
+      const takeOver = seamlessReadyAudio
+      seamlessReadyAudio = null
+      seamlessReadyUrl = ''
+      const mainVolume = main.volume
+      takeOver.volume = mainVolume
+      const p = takeOver.play()
+      if (p && p.catch) p.catch(() => { })
+      main.volume = 0
+      origSetAudio(nextAudio)
+      const swapStart = Date.now()
+      const SWAP_MS = 400
+      const fadeSwap = () => {
+        if (!takeOver.src) return
+        const progress = Math.min((Date.now() - swapStart) / SWAP_MS, 1)
+        const v = mainVolume * progress
+        main.volume = clampVolume(v)
+        takeOver.volume = clampVolume(mainVolume * (1 - progress))
+        if (progress < 1) {
+          requestAnimationFrame(fadeSwap)
+        } else {
+          takeOver.pause()
+          takeOver.src = ''
+          main.volume = mainVolume
+          suppressVolumeSave(ap, 500)
+          if (typeof onMediaSessionSync === 'function') onMediaSessionSync()
+        }
+      }
+      requestAnimationFrame(fadeSwap)
+    }
+  }
+
+  const seamlessEnabled = () => crossfadeEnabled.value
 
   const restoreTrigger = (ap) => {
     if (origTrigger && ap) {
@@ -275,13 +335,15 @@ export const useCrossfade = () => {
 
   const setupCrossfade = (ap, onMediaSessionSync) => {
     let crossfadeTriggered = false
+    interceptSetAudio(ap, onMediaSessionSync)
 
     ap.on('timeupdate', () => {
       if (!crossfadeEnabled.value || isCrossfading || handoffAudio) return
       const audio = ap.audio
       const remaining = audio.duration - audio.currentTime
       if (!Number.isFinite(remaining)) return
-      if (remaining <= PRELOAD_LEAD_TIME && remaining > CROSSFADE_DURATION + 1 && audio.duration > CROSSFADE_DURATION + 2 && !preloadedAudioEl) {
+      // 预加载下一首，供 seamless setAudio 与 crossfade 共用
+      if (remaining <= PRELOAD_LEAD_TIME && remaining > CROSSFADE_DURATION + 1 && audio.duration > CROSSFADE_DURATION + 2 && !preloadedAudioEl && !seamlessReadyAudio) {
         const loop = getLoopMode(ap)
         const idx = ap.nextIndex()
         if (idx !== undefined && idx !== null && loop !== 'one' && ap.list.audios.length > 1) {
@@ -289,6 +351,14 @@ export const useCrossfade = () => {
           preloadedAudioEl.preload = 'auto'
           preloadedForIndex = idx
         }
+      }
+      // 把预加载元素登记为 seamless 候选（readyState 达标才可用于无缝切换）
+      if (preloadedAudioEl && preloadedAudioEl.readyState >= 2 && seamlessReadyUrl !== ap.list.audios[preloadedForIndex]?.url) {
+        destroySeamlessReady()
+        seamlessReadyAudio = preloadedAudioEl
+        seamlessReadyUrl = ap.list.audios[preloadedForIndex]?.url || ''
+        preloadedAudioEl = null
+        preloadedForIndex = -1
       }
       if (
         remaining <= CROSSFADE_DURATION &&
