@@ -8,6 +8,7 @@
     @mouseleave="$emit('ui-leave')"
     @touchstart.stop="$emit('ui-enter')"
     @touchend.stop="$emit('ui-leave')"
+    @pointerdown="$emit('focus')"
   >
     <div
       class="floating-todo-header"
@@ -80,6 +81,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   todos: { type: Array, default: () => [] },
+  windowOrder: { type: Number, default: 1599 },
 })
 
 const sortedTodos = computed(() => [
@@ -87,7 +89,7 @@ const sortedTodos = computed(() => [
   ...props.todos.filter(t => t.completed),
 ])
 
-defineEmits(['close', 'toggle', 'ui-enter', 'ui-leave'])
+defineEmits(['close', 'toggle', 'ui-enter', 'ui-leave', 'focus'])
 
 const STORAGE_KEY = 'study_floating_todo_layout'
 const MIN_WIDTH = 260
@@ -167,6 +169,7 @@ const containerStyle = computed(() => ({
   top: `${layout.value.y}px`,
   width: `${layout.value.width}px`,
   height: `${layout.value.height}px`,
+  zIndex: props.windowOrder,
 }))
 
 let dragOffset = { x: 0, y: 0 }
@@ -281,7 +284,6 @@ onUnmounted(() => {
 <style scoped>
 .floating-todo {
   position: fixed;
-  z-index: 1600;
   display: flex;
   flex-direction: column;
   border-radius: 10px;

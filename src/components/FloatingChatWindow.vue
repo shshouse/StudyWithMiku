@@ -8,6 +8,7 @@
     @mouseleave="$emit('ui-leave')"
     @touchstart.stop="$emit('ui-enter')"
     @touchend="$emit('ui-leave')"
+    @pointerdown="$emit('focus')"
   >
     <div
       class="floating-chat-header"
@@ -82,7 +83,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 
-defineProps({
+const props = defineProps({
   messages: { type: Array, default: () => [] },
   onlineCount: { type: Number, default: 0 },
   isConnected: { type: Boolean, default: false },
@@ -96,9 +97,10 @@ defineProps({
   isLoadingMore: { type: Boolean, default: false },
   loadMore: { type: Function, default: null },
   onPlaySharedSong: { type: Function, default: null },
+  windowOrder: { type: Number, default: 1600 },
 })
 
-defineEmits(['close', 'login', 'ui-enter', 'ui-leave'])
+defineEmits(['close', 'login', 'ui-enter', 'ui-leave', 'focus'])
 
 const STORAGE_KEY = 'study_floating_chat_layout'
 const MIN_WIDTH = 300
@@ -178,6 +180,7 @@ const containerStyle = computed(() => ({
   top: `${layout.value.y}px`,
   width: `${layout.value.width}px`,
   height: `${layout.value.height}px`,
+  zIndex: props.windowOrder,
 }))
 
 let dragOffset = { x: 0, y: 0 }
@@ -292,7 +295,6 @@ onUnmounted(() => {
 <style scoped>
 .floating-chat {
   position: fixed;
-  z-index: 1600;
   display: flex;
   flex-direction: column;
   border-radius: 10px;

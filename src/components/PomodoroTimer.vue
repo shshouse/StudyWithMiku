@@ -349,7 +349,7 @@
                 <div class="about-content">
                   <p>1.StudyWithMiku是一个基于STUDYWITHMIKU企划的免费开源沉浸式学习陪伴网站</p>
                   <p>2.项目代码在github开源，欢迎点上star！</p>
-                  <p>3.项目部署域名：study.mikumod.com</p>
+                  <p>3.项目部署网址：study.mikumod.com</p>
                   <p>4.希望你可以喜欢！在悠闲的音乐里和初音一起学习吧~</p>
                   <p>5.欢迎加入吹水聊天QQ群：<span class="qq-num" @click="copyQQGroup" title="点击复制">941108668</span>（点击复制）</p>
                 </div>
@@ -438,20 +438,24 @@
     :has-more="hasMoreHistory"
     :is-loading-more="isLoadingHistory"
     :load-more="loadMoreMessages"
+    :window-order="windowOrder.chat"
     @close="closeChatPopout"
     @login="login"
     @ui-enter="onUIMouseEnter"
     @ui-leave="onUIMouseLeave"
+    @focus="focusWindow('chat')"
   />
 </transition>
 <transition name="fade">
   <FloatingTodoWindow
     v-if="isTodoPopped"
     :todos="todos"
+    :window-order="windowOrder.todo"
     @close="closeTodoPopout"
     @toggle="toggleTodo"
     @ui-enter="onUIMouseEnter"
     @ui-leave="onUIMouseLeave"
+    @focus="focusWindow('todo')"
   />
 </transition>
 </div>
@@ -532,6 +536,13 @@ const openTodoPopout = () => {
 const closeTodoPopout = () => {
   isTodoPopped.value = false
   localStorage.setItem(TODO_POPOUT_KEY, '0')
+}
+
+// 浮窗点击置顶：最新被点击的浮窗在上层（设置页 1700 恒高于浮窗）
+const windowOrder = reactive({ chat: 1600, todo: 1599 })
+const focusWindow = (name) => {
+  windowOrder.chat = name === 'chat' ? 1600 : 1599
+  windowOrder.todo = name === 'todo' ? 1600 : 1599
 }
 let syncToastTimer = null
 const syncToastSubtitle = ref('欢迎回来！Miku 等你许久了 >﹏<')
@@ -1614,7 +1625,7 @@ const handleVisibilityChange = () => {
     display: none;
   }
 }
-.settings-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1002; }
+.settings-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1700; }
 .settings-panel { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(30px); border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.2); width: 90%; max-width: 550px; height: 70vh; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; }
 
 @media (max-width: 768px) {
