@@ -125,7 +125,7 @@ export const useCrossfade = () => {
       const main = ap.audio
       const nextUrl = nextAudio?.url
       const canSeamless =
-        seamlessEnabled() &&
+        seamlessEnabled() && !isCrossfading && !isHandingOff && !handoffAudio &&
         main && !main.paused && nextUrl &&
         seamlessReadyAudio && seamlessReadyUrl === nextUrl && seamlessReadyAudio.readyState >= 2
       if (!canSeamless) {
@@ -143,23 +143,29 @@ export const useCrossfade = () => {
       origSetAudio(nextAudio)
       const swapStart = Date.now()
       const SWAP_MS = 400
-      const fadeSwap = () => {
-        if (!takeOver.src) return
-        const progress = Math.min((Date.now() - swapStart) / SWAP_MS, 1)
-        const v = mainVolume * progress
-        main.volume = clampVolume(v)
-        takeOver.volume = clampVolume(mainVolume * (1 - progress))
-        if (progress < 1) {
-          requestAnimationFrame(fadeSwap)
-        } else {
-          takeOver.pause()
-          takeOver.src = ''
-          main.volume = mainVolume
-          suppressVolumeSave(ap, 500)
-          if (typeof onMediaSessionSync === 'function') onMediaSessionSync()
+      let swapDone = false
+      const finishSwap = () => {
+        if (swapDone) return
+        swapDone = true
+        clearInterval(swapTimer)
+        takeOver.pause()
+        takeOver.src = ''
+        main.volume = mainVolume
+        suppressVolumeSave(ap, 800)
+        if (main.paused && !main.ended) {
+          const rp = main.play()
+          if (rp && rp.catch) rp.catch(() => { })
         }
+        if (typeof onMediaSessionSync === 'function') onMediaSessionSync()
       }
-      requestAnimationFrame(fadeSwap)
+      const swapTimer = setInterval(() => {
+        if (swapDone || !takeOver.src) { finishSwap(); return }
+        const progress = Math.min((Date.now() - swapStart) / SWAP_MS, 1)
+        main.volume = clampVolume(mainVolume * progress)
+        takeOver.volume = clampVolume(mainVolume * (1 - progress))
+        if (progress >= 1) finishSwap()
+      }, 50)
+      setTimeout(finishSwap, 2000)
     }
   }
 
