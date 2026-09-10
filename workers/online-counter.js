@@ -1,3 +1,5 @@
+import { STICKER_FILES } from '../src/data/stickers.js'
+
 const CHAT_ROOM_ID = 'global'
 const MAX_USERNAME_LENGTH = 40
 const MAX_MESSAGE_LENGTH = 500
@@ -47,8 +49,11 @@ const getAdminUserIds = (env) => new Set(
 
 const sanitizeUsername = (value) => String(value || '').trim().slice(0, MAX_USERNAME_LENGTH)
 
-const STICKER_MESSAGE_PATTERN = /^\[sticker:(?:1[0-5]|[1-9])\]$/
-const isStickerMessage = (value) => STICKER_MESSAGE_PATTERN.test(String(value || ''))
+const STICKER_MESSAGE_PATTERN = /^\[sticker:(\d+)\]$/
+const isStickerMessage = (value) => {
+  const match = STICKER_MESSAGE_PATTERN.exec(String(value || ''))
+  return !!match && !!STICKER_FILES[Number(match[1])]
+}
 
 const sanitizeContent = (value) => {
   const str = String(value || '').trim().slice(0, MAX_MESSAGE_LENGTH)
