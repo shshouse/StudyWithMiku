@@ -56,11 +56,18 @@ export const recommendPlaylists = [
     tags: ['低BPM','纯音乐','By 狐十一狸']
   },
   {
+    name: '东方精选集',
+    desc: '',
+    platform: 'netease',
+    playlistId: '8891884744',
+    tags: ['By 酸']
+  },
+  {
     name: '酸の心',
     desc: '┭┮﹏┭┮',
     platform: 'netease',
     playlistId: '5438089118',
-    tags: []
+    tags: ['By 酸']
   },
 ]
 

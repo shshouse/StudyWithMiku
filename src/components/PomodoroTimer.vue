@@ -176,7 +176,7 @@
                 </transition>
                 <div class="toggle-grid">
                     <div class="toggle-item">
-                      <label>休息时暂停音乐</label>
+                      <label>休息时暂停音乐(测试)</label>
                       <label class="toggle-switch">
                         <input type="checkbox" v-model="pauseMusicDuringBreak" @change="saveMusicPauseSettings(pauseMusicDuringBreak, hidePomodoroOnIdle, showHitokoto)"/>
                         <span class="toggle-slider"></span>
@@ -197,7 +197,7 @@
                       </label>
                     </div>
                     <div class="toggle-item">
-                      <label>歌曲平滑过渡（测试）</label>
+                      <label>歌曲平滑过渡</label>
                       <label class="toggle-switch">
                         <input type="checkbox" v-model="crossfadeEnabled" @change="toggleCrossfade(crossfadeEnabled)"/>
                         <span class="toggle-slider"></span>
