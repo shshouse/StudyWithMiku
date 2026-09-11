@@ -23,6 +23,7 @@ let isCrossfadeListSwitch = false
 let origSetAudio = null
 let seamlessReadyAudio = null
 let seamlessReadyUrl = ''
+let doSeekArmed = false
 
 export const useCrossfade = () => {
   const toggleCrossfade = (val) => {
@@ -186,6 +187,7 @@ export const useCrossfade = () => {
 
   const handleCrossfadeEnd = (ap, onMediaSessionSync) => {
     clearCrossfadeEndFallback()
+    doSeekArmed = false
     const nextIdx = crossfadeNextIndex
     if (nextIdx === -1 || !crossfadeAudio) {
       cleanup(ap, onMediaSessionSync)
@@ -242,13 +244,17 @@ export const useCrossfade = () => {
     }
 
     const doSeekAndHandoff = () => {
-      if (handoffDone || !handoffAudio) return
+      if (handoffDone || !handoffAudio || doSeekArmed) return
+      doSeekArmed = true
       activeAudio = ap.audio
       const targetTime = Math.max(0, handoffAudio.currentTime)
+      handoffAudio.volume = 0
 
       try {
         activeAudio.currentTime = targetTime
       } catch (e) {
+        doSeekArmed = false
+        handoffAudio.volume = targetVolume
         handoffTimer = setTimeout(doSeekAndHandoff, 250)
         return
       }
