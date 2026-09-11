@@ -111,6 +111,11 @@ export const useCrossfade = () => {
     ap.events.trigger = (event, data) => {
       const loop = getLoopMode(ap)
       if (event === 'ended' && isCrossfading && loop !== 'one') {
+        if (document.visibilityState !== 'visible') {
+          cleanup(ap, onMediaSessionSync)
+          origTrigger(event, data)
+          return
+        }
         handleCrossfadeEnd(ap, onMediaSessionSync)
         return
       }
@@ -126,6 +131,7 @@ export const useCrossfade = () => {
       const nextUrl = nextAudio?.url
       const canSeamless =
         seamlessEnabled() && !isCrossfading && !isHandingOff && !handoffAudio &&
+        document.visibilityState === 'visible' &&
         main && !main.paused && nextUrl &&
         seamlessReadyAudio && seamlessReadyUrl === nextUrl && seamlessReadyAudio.readyState >= 2
       if (!canSeamless) {
@@ -345,6 +351,8 @@ export const useCrossfade = () => {
 
     ap.on('timeupdate', () => {
       if (!crossfadeEnabled.value || isCrossfading || handoffAudio) return
+      // 后台/锁屏不启动 crossfade 也不预加载：动画和兜底定时器在后台全冻结
+      if (document.visibilityState !== 'visible') return
       const audio = ap.audio
       const remaining = audio.duration - audio.currentTime
       if (!Number.isFinite(remaining)) return

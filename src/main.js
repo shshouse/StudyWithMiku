@@ -2,6 +2,7 @@ const trackers = [
   { url: import.meta.env.VITE_T1, stub: import.meta.env.VITE_T1_STUB },
   { url: import.meta.env.VITE_T2, init: import.meta.env.VITE_T2_INIT },
   { url: import.meta.env.VITE_T3 },
+  { url: import.meta.env.VITE_T4 },
 ]
 for (const t of trackers) {
   if (!t.url) continue
