@@ -133,7 +133,10 @@ export function useOnlineCount(wsUrl, options = {}) {
             const incoming = Array.isArray(data.messages)
               ? data.messages.map(normalizeChatMessage).filter(Boolean)
               : []
-            messages.value = dedupAndSort(incoming)
+            const next = dedupAndSort(incoming)
+            if (JSON.stringify(next) !== JSON.stringify(messages.value)) {
+              messages.value = next
+            }
             hasMoreHistory.value = !!data.hasMore
             isLoadingHistory.value = false
             pendingLoadCursor = null
