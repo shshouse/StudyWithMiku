@@ -14,6 +14,45 @@ const PLATFORMS = [
   { value: 'tencent', label: 'QQ音乐' },
 ]
 
+const CUSTOM_KEY = 'custom_playlists'
+const isValidPlatform = (p) => PLATFORMS.some(x => x.value === p)
+
+const loadCustomPlaylists = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]')
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(p => p && isValidPlatform(p.platform) && String(p.playlistId || '').trim())
+  } catch {
+    return []
+  }
+}
+
+const customPlaylists = ref(loadCustomPlaylists())
+
+const persistCustom = (list) => {
+  customPlaylists.value = list
+  try {
+    localStorage.setItem(CUSTOM_KEY, JSON.stringify(list))
+  } catch (e) {
+    console.error('Failed to save custom playlists:', e)
+  }
+}
+
+const addCustomPlaylist = (p, id, name) => {
+  if (!isValidPlatform(p)) return false
+  const playlistId = String(id || '').trim()
+  if (!playlistId) return false
+  const existing = customPlaylists.value.find(x => x.platform === p && x.playlistId === playlistId)
+  const title = String(name || '').trim().slice(0, 50) || existing?.name || `ID:${playlistId}`
+  const rest = customPlaylists.value.filter(x => !(x.platform === p && x.playlistId === playlistId))
+  persistCustom([{ name: title, platform: p, playlistId }, ...rest])
+  return true
+}
+
+const removeCustomPlaylist = (p, id) => {
+  persistCustom(customPlaylists.value.filter(x => !(x.platform === p && x.playlistId === id)))
+}
+
 export const useMusic = () => {
 
   const loadMetingSongs = async (platform, id) => {
@@ -34,12 +73,14 @@ export const useMusic = () => {
         songs.value = playlist
         saveConfig(platform, id)
         metingConfig.value = { platform, id }
+        return true
       }
     } catch (error) {
       console.error('Load meting songs error:', error)
     } finally {
       loading.value = false
     }
+    return false
   }
 
   const loadSongs = async () => {
@@ -72,9 +113,11 @@ export const useMusic = () => {
   }
 
   const applyCustomPlaylist = async (p, id) => {
+    const ok = await loadMetingSongs(p, id)
+    if (!ok) return false
     setPlatform(p)
     setPlaylistId(id)
-    await loadMetingSongs(p, id)
+    return true
   }
 
   const resetToLocal = async () => {
@@ -90,6 +133,9 @@ export const useMusic = () => {
     playlistId,
     platform,
     bitrate,
+    customPlaylists,
+    addCustomPlaylist,
+    removeCustomPlaylist,
     loadSongs,
     updateMetingPlaylist,
     setPlaylistId,

@@ -182,6 +182,64 @@ const getCounterStub = (env) => {
   const id = env.ONLINE_COUNTER.idFromName(CHAT_ROOM_ID)
   return env.ONLINE_COUNTER.get(id)
 }
+const PLAYLIST_ID_PATTERN = /^\d{1,20}$/
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
+const PLAYLIST_NAME_SOURCES = {
+  netease: (id) => ({
+    url: `https://music.163.com/api/playlist/detail?id=${id}&n=0&s=0`,
+    referer: 'https://music.163.com/',
+    pick: (data) => data?.result?.name,
+  }),
+  tencent: (id) => ({
+    url: `https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?type=1&json=1&utf8=1&onlysong=0&disstid=${id}&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0`,
+    referer: 'https://y.qq.com/',
+    pick: (data) => data?.cdlist?.[0]?.dissname,
+  }),
+}
+
+const fetchPlaylistNameOnce = async (platform, id) => {
+  const build = PLAYLIST_NAME_SOURCES[platform]
+  if (!build) return { name: '', reason: 'unknown_platform' }
+
+  const { url, referer, pick } = build(id)
+
+  try {
+    const upstream = await fetch(url, {
+      headers: { Referer: referer, 'User-Agent': BROWSER_UA },
+    })
+    if (!upstream.ok) {
+      return { name: '', reason: `http_${upstream.status}` }
+    }
+
+    const text = await upstream.text()
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch {
+      return { name: '', reason: `bad_json:${text.slice(0, 60)}` }
+    }
+
+    const name = pick(data)
+    if (typeof name !== 'string' || !name.trim()) {
+      return { name: '', reason: `no_name:${JSON.stringify(data).slice(0, 120)}` }
+    }
+    return { name: name.trim().slice(0, 100), reason: '' }
+  } catch (err) {
+    return { name: '', reason: `fetch_error:${String(err)}` }
+  }
+}
+
+const fetchPlaylistName = async (platform, id) => {
+  let reason = ''
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await fetchPlaylistNameOnce(platform, id)
+    if (result.name) return { name: result.name, reason: '' }
+    reason = result.reason
+    console.error(`playlist-name attempt ${attempt + 1} failed: ${reason}`)
+  }
+  return { name: '', reason }
+}
 
 const withCors = (response, origin, env) => {
   const headers = new Headers(response.headers)
@@ -564,6 +622,26 @@ export default {
       }
 
       return getCounterStub(env).fetch(request)
+    }
+
+    if (url.pathname === '/playlist-name') {
+      if (!isOriginAllowed(origin, env)) {
+        return new Response('Forbidden', { status: 403 })
+      }
+
+      const platform = String(url.searchParams.get('platform') || '').trim()
+      const id = String(url.searchParams.get('id') || '').trim()
+      if (!PLAYLIST_ID_PATTERN.test(id)) {
+        return jsonResponse({ name: '', reason: 'bad_id' }, { headers: getCorsHeaders(origin, env) })
+      }
+
+      const { name, reason } = await fetchPlaylistName(platform, id)
+      return jsonResponse({ name, reason }, {
+        headers: {
+          ...getCorsHeaders(origin, env),
+          'Cache-Control': name ? 'public, max-age=86400' : 'no-store',
+        },
+      })
     }
 
     if (url.pathname === '/count' || url.pathname === '/history') {

@@ -61,3 +61,24 @@ export const saveConfig = (platform, id) => {
   localStorage.setItem('music_platform', platform)
   localStorage.setItem('music_id', id)
 }
+export const PLAYLIST_NAME_API = String(import.meta.env.VITE_WS_URL || '')
+  .replace(/^ws/, 'http')
+  .replace(/\/ws\/?$/, '')
+
+const getPlaylistNameUrl = (platform, id) => {
+  if (!PLAYLIST_NAME_API || !platform || !id) return ''
+  return `${PLAYLIST_NAME_API}/playlist-name?platform=${encodeURIComponent(platform)}&id=${encodeURIComponent(id)}`
+}
+
+export const fetchPlaylistName = async (platform, id) => {
+  const url = getPlaylistNameUrl(platform, id)
+  if (!url) return ''
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(4000) })
+    if (!response.ok) return ''
+    const data = await response.json()
+    return typeof data?.name === 'string' ? data.name.trim() : ''
+  } catch {
+    return ''
+  }
+}

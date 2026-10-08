@@ -224,13 +224,29 @@
                 </div>
                 <div class="setting-group setting-group-row">
                   <label>歌单ID</label>
-                  <input type="text" v-model="inputPlaylistId" placeholder="歌单ID" class="playlist-id-input"/>
+                  <input type="text" v-model="inputPlaylistId" placeholder="歌单ID" class="playlist-id-input" @keyup.enter="applyPlaylist"/>
                   <button class="action-btn apply-btn" @click="applyPlaylist">获取</button>
                 </div>
                 <div class="playlist-actions">
                   <button class="action-btn song-send-btn" @click="shareCurrentSong" :disabled="!isAuthenticated" title="分享当前正在播放的歌曲到聊天室">分享当前歌曲</button>
                   <button class="action-btn reset-playlist-btn" @click="resetPlaylist">默认歌单</button>
                   <a class="action-btn help-btn" href="https://www.bilibili.com/opus/1144256090307821590" target="_blank">歌单ID怎么获取?</a>
+                </div>
+                <div class="playlist-recommend">
+                  <div class="recommend-title">我的歌单</div>
+                  <div v-if="customPlaylists.length === 0" class="custom-empty">还没有歌单＞﹏＜</div>
+                  <div class="recommend-list custom-list">
+                    <div v-for="item in customPlaylists" :key="keyOf(item)" class="recommend-item" :class="{ 'item-active': item.platform === platform && item.playlistId === playlistId }">
+                      <div class="recommend-header" @click="applyCustomItem(item)">
+                        <span class="recommend-name">{{ item.name }}</span>
+                        <span class="recommend-desc">{{ PLATFORMS.find(p => p.value === item.platform)?.label }}</span>
+                      </div>
+                      <div class="recommend-meta">
+                        <span class="recommend-id-text">ID: {{ item.playlistId }}</span>
+                        <button class="remove-btn" :class="{ confirming: confirmingKey === keyOf(item) }" @click.stop="removeCustomItem(item)">{{ confirmingKey === keyOf(item) ? '确认删除' : '删除' }}</button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div class="playlist-recommend">
                   <div class="recommend-title">推荐歌单</div>
@@ -466,6 +482,7 @@
   import { Timer, CheckSquare, Music, MessageSquare, Calendar, CloudUpload, History, Info } from 'lucide-vue-next'
   import { useOnlineCount } from '../composables/useOnlineCount.js'
   import { useMusic } from '../composables/useMusic.js'
+  import { fetchPlaylistName } from '../services/meting.js'
   import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
   import { useCrossfade } from '../composables/useCrossfade.js'
   import { useCountdown } from '../composables/useCountdown.js'
@@ -509,7 +526,7 @@ const props = defineProps({
 const { token, username, userId, tokenUserChanged, sessionExpired, isLoggedIn, login, logout, clearTokenUserChanged, clearSessionExpired, isTokenExpired } = useStudyAuth()
 const { onlineCount, adminOnline, isConnected, isAuthenticated, messages, chatError, hasMoreHistory, isLoadingHistory, sendChatMessage, loadMoreMessages } = useOnlineCount(import.meta.env.VITE_WS_URL, { username, token })
 const { profiles: userProfiles, ensureProfiles } = useUserProfiles()
-const { playlistId, platform, bitrate, applyCustomPlaylist, resetToLocal, songs, DEFAULT_PLAYLIST_ID, PLATFORMS, BITRATE_OPTIONS, setBitrate } = useMusic()
+const { playlistId, platform, bitrate, applyCustomPlaylist, resetToLocal, songs, customPlaylists, addCustomPlaylist, removeCustomPlaylist, DEFAULT_PLAYLIST_ID, PLATFORMS, BITRATE_OPTIONS, setBitrate } = useMusic()
 const { syncStatus, lastSyncTime, fetchRemoteData, syncOnLogin, pushCalendar, fetchCalendar, pushAll } = useStudySync()
 const { countdowns, addCountdown, deleteCountdown, setCountdowns } = useCountdown()
 const { crossfadeEnabled, toggleCrossfade, fadeMusicOut, fadeMusicIn } = useCrossfade()
@@ -827,9 +844,40 @@ const addPomodoro = () => { studyStats.totalPomodoros++; studyStats.todayPomodor
 const resetStats = () => { studyStats.totalStudyTime = 0; studyStats.totalPomodoros = 0; studyStats.todayStudyTime = 0; studyStats.todayPomodoros = 0; studyStats.lastDate = getToday(); saveStats() }
 const formatStudyTime = (seconds) => { const h = Math.floor(seconds / 3600); const m = Math.floor((seconds % 3600) / 60); return h > 0 ? `${h}小时${m}分钟` : `${m}分钟` }
 
-const applyPlaylist = async () => { if (!inputPlaylistId.value) return; await applyCustomPlaylist(selectedPlatform.value, inputPlaylistId.value); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
-const resetPlaylist = async () => { inputPlaylistId.value = ''; await resetToLocal(); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
-const applyRecommendPlaylist = async (item) => { await applyCustomPlaylist(item.platform, item.playlistId); const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
+const refreshPlayerList = () => { const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
+const applyPlaylist = async () => {
+  const id = inputPlaylistId.value.trim()
+  if (!id) return
+  const p = selectedPlatform.value
+  const ok = await applyCustomPlaylist(p, id)
+  if (!ok) { triggerSyncToastText('歌单加载失败', '检查一下歌单ID是否正确'); return }
+  refreshPlayerList()
+  const existing = customPlaylists.value.find(x => x.platform === p && x.playlistId === id)
+  addCustomPlaylist(p, id, existing ? '' : await fetchPlaylistName(p, id))
+}
+const resetPlaylist = async () => { inputPlaylistId.value = ''; await resetToLocal(); refreshPlayerList() }
+const applyRecommendPlaylist = async (item) => { await applyCustomPlaylist(item.platform, item.playlistId); refreshPlayerList() }
+const applyCustomItem = (item) => {
+  selectedPlatform.value = item.platform; inputPlaylistId.value = item.playlistId
+  return applyRecommendPlaylist(item)
+}
+
+const keyOf = (item) => item.platform + '_' + item.playlistId
+
+const confirmingKey = ref('')
+let confirmTimer = null
+const removeCustomItem = (item) => {
+  const key = keyOf(item)
+  if (confirmingKey.value !== key) {
+    confirmingKey.value = key
+    clearTimeout(confirmTimer)
+    confirmTimer = setTimeout(() => { confirmingKey.value = '' }, 3000)
+    return
+  }
+  clearTimeout(confirmTimer)
+  confirmingKey.value = ''
+  removeCustomPlaylist(item.platform, item.playlistId)
+}
 
 const shareCurrentSong = () => {
   const ap = getAPlayerInstance()
@@ -1828,6 +1876,17 @@ const handleVisibilityChange = () => {
 .reset-playlist-btn { background: rgba(255, 152, 0, 0.3); border-color: rgba(255, 152, 0, 0.5); }
 .song-send-btn { background: rgba(65, 128, 209, 0.3); border-color: rgba(65, 128, 209, 0.5); }
 .song-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.custom-empty { font-size: 0.8rem; color: rgba(255, 255, 255, 0.4); text-align: left; padding: 0.2rem 0; }
+.recommend-item.item-active { border-color: rgba(41, 128, 185, 0.7); background: rgba(41, 128, 185, 0.12); }
+.remove-btn { background: none; border: none; color: rgba(255, 255, 255, 0.4); font-size: 0.7rem; cursor: pointer; padding: 0.2rem 0.4rem; border-radius: 4px; transition: all 0.2s ease; }
+.remove-btn:hover { color: rgba(255, 120, 120, 0.9); background: rgba(255, 80, 80, 0.12); }
+.remove-btn.confirming { color: rgba(255, 140, 140, 0.95); background: rgba(255, 80, 80, 0.2); }
+.recommend-id-text { font-size: 0.7rem; color: rgba(255, 255, 255, 0.5); }
+/* 我的歌单双列 */
+.recommend-list.custom-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+.recommend-list.custom-list .recommend-item { padding: 0.7rem 0.9rem; gap: 0.4rem; }
+.recommend-list.custom-list .recommend-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 520px) { .recommend-list.custom-list { grid-template-columns: 1fr; } }
 .playlist-id-input { min-width: 0; }
 .help-btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
 .playlist-recommend { margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255, 255, 255, 0.1); width: 100%; max-width: 400px; }
