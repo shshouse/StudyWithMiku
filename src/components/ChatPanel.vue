@@ -71,6 +71,24 @@
               :data-mid="message.id"
               class="chat-message-item"
             >
+              <div class="chat-message-actions">
+                <button
+                  type="button"
+                  class="chat-reply-btn"
+                  title="回复"
+                  :aria-label="`回复 ${resolveUsername(message) || '游客'}`"
+                  @click="startReply(message)"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="9 14 4 9 9 4"></polyline>
+                    <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+                  </svg>
+                </button>
+              </div>
+              <div v-if="message.replyToId && findMessageById(message.replyToId)" class="chat-reply-quote">
+                <span class="chat-reply-quote-name">{{ resolveUsername(findMessageById(message.replyToId)) || '游客' }}</span>
+                <span class="chat-reply-quote-text">{{ getReplySummary(findMessageById(message.replyToId).content) }}</span>
+              </div>
               <img
                 v-if="renderStickerId(message.content) !== null"
                 :src="getStickerUrl(renderStickerId(message.content))"
@@ -143,6 +161,25 @@
       </transition>
     </div>
     <div v-if="chatError" class="chat-error">{{ chatError }}</div>
+    <div v-if="replyingTo" class="chat-replying-bar">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="9 14 4 9 9 4"></polyline>
+        <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+      </svg>
+      <span class="chat-replying-text">回复 <b>{{ resolveUsername(replyingTo) || '游客' }}</b>：{{ getReplySummary(replyingTo.content) }}</span>
+      <button
+        type="button"
+        class="chat-replying-cancel"
+        title="取消回复"
+        aria-label="取消回复"
+        @click="cancelReply"
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
     <form class="chat-form" @submit.prevent="submit">
       <div class="chat-input-wrapper">
         <button
@@ -163,6 +200,7 @@
           </svg>
         </button>
         <input
+          ref="chatInputRef"
           v-model="chatInput"
           class="chat-input"
           type="text"
@@ -203,6 +241,7 @@
 import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { STICKER_IDS, getStickerId, getStickerUrl, buildStickerMessage } from '../data/stickers.js'
 import { parseMusicShareMessage, parseCountdownShareMessage, buildPicUrl } from '../data/musicShare.js'
+import { buildReplyMessage, parseReplyMessage } from '../data/replyMessage.js'
 import { getCountdownDays } from '../composables/useCountdown.js'
 import { useGeoLocation } from '../composables/useGeoLocation.js'
 
@@ -250,6 +289,37 @@ const unreadCount = ref(0)
 const lastSeenMessageId = ref('')
 const avatarLoadFailures = reactive(new Set())
 const showStickerPanel = ref(false)
+const replyingTo = ref(null)
+const chatInputRef = ref(null)
+
+// 回复文本协议：[reply:消息id]正文，类似 [sticker:N]
+const getReplySummary = (content) => {
+  const parsed = parseReplyMessage(content)
+  const str = (parsed ? parsed.text : String(content || '')).trim()
+  if (!str) return '[空消息]'
+  if (getStickerId(str) !== null) return '[表情包]'
+  const music = parseMusicShareMessage(str)
+  if (music) return `[音乐] ${music.name || '未知歌曲'}`
+  const countdown = parseCountdownShareMessage(str)
+  if (countdown) return `[倒计时] ${countdown.title || countdown.date || ''}`
+  return str.length > 40 ? `${str.slice(0, 40)}…` : str
+}
+
+const findMessageById = (id) => props.messages.find(m => m.id === id) || null
+
+const startReply = (message) => {
+  if (!props.isLoggedIn) {
+    emit('login')
+    return
+  }
+  replyingTo.value = message
+  closeStickerPanel()
+  nextTick(() => chatInputRef.value?.focus())
+}
+
+const cancelReply = () => {
+  replyingTo.value = null
+}
 
 const renderStickerId = (content) => getStickerId(content)
 
@@ -292,10 +362,14 @@ const groupedMessages = computed(() => {
     return aId && bId && aId === bId
   }
   for (const message of list) {
-    if (current && sameUser(current.messages[current.messages.length - 1], message)) {
-      current.messages.push(message)
+    const parsed = parseReplyMessage(message.content)
+    const enriched = parsed
+      ? { ...message, content: parsed.text, replyToId: parsed.replyToId }
+      : message
+    if (current && sameUser(current.messages[current.messages.length - 1], enriched)) {
+      current.messages.push(enriched)
     } else {
-      current = { key: message.id, messages: [message] }
+      current = { key: enriched.id, messages: [enriched] }
       groups.push(current)
     }
   }
@@ -528,7 +602,9 @@ const submit = () => {
   }
   const content = chatInput.value.trim()
   if (!content) return
-  if (props.sendMessage(content, geoLocation.value)) {
+  const payload = replyingTo.value ? buildReplyMessage(replyingTo.value.id, content) : content
+  if (props.sendMessage(payload, geoLocation.value)) {
+    replyingTo.value = null
     chatInput.value = ''
     autoScrollPending.value = true
     const msgs = props.messages
@@ -933,10 +1009,104 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   line-height: 1.5;
   font-size: 0.9rem;
   padding-top: 0.1rem;
+  position: relative;
 }
 .chat-message-item + .chat-message-item {
   margin-top: 0.18rem;
 }
+.chat-message-actions {
+  position: absolute;
+  top: -8px;
+  right: -4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 2;
+}
+.chat-message-item:hover .chat-message-actions { opacity: 1; }
+.chat-reply-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(18, 20, 26, 0.92);
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.chat-reply-btn:hover {
+  color: #fff;
+  background: rgba(57, 197, 187, 0.4);
+}
+@media (hover: none) {
+  .chat-message-actions { opacity: 0.4; }
+}
+.chat-reply-quote {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  max-width: 240px;
+  margin: 0 0 0.2rem;
+  padding: 0.22rem 0.5rem;
+  border-radius: 6px;
+  border-left: 2px solid rgba(57, 197, 187, 0.55);
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.55);
+  overflow: hidden;
+}
+.chat-message-group.own .chat-reply-quote { background: rgba(0, 0, 0, 0.14); }
+.chat-reply-quote-name {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: rgba(57, 197, 187, 0.9);
+}
+.chat-reply-quote-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-replying-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.65);
+  background: rgba(57, 197, 187, 0.1);
+  border: 1px solid rgba(57, 197, 187, 0.28);
+}
+.chat-replying-bar > svg { flex-shrink: 0; color: rgba(57, 197, 187, 0.85); }
+.chat-replying-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-replying-text b { color: rgba(255, 255, 255, 0.85); font-weight: 600; }
+.chat-replying-cancel {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.chat-replying-cancel:hover { color: #fff; background: rgba(255, 255, 255, 0.2); }
 .chat-jump-to-bottom {
   position: absolute;
   right: 8px;
