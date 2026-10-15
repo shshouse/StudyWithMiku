@@ -25,8 +25,6 @@ const asObject = (value) => (
   value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 )
 
-// Merge each settings section independently so older/partial saved settings
-// retain defaults for fields that were added in later versions.
 const mergeSettings = (base, overrides) => {
   const safeOverrides = asObject(overrides)
   return {
@@ -47,7 +45,6 @@ export const getSettings = () => {
   } catch (e) {
     console.error('Failed to load settings:', e)
   }
-  // Return fresh nested objects rather than references to module defaults.
   return mergeSettings(defaultSettings, {})
 }
 

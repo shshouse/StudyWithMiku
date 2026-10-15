@@ -9,7 +9,6 @@ const playlistId = ref(localStorage.getItem('playlist_id') || DEFAULT_PLAYLIST_I
 const platform = ref(localStorage.getItem('music_platform') || 'netease')
 const bitrate = ref(localStorage.getItem('music_bitrate') || DEFAULT_BITRATE)
 
-// Only the most recently requested playlist may update shared music state.
 let loadRequestId = 0
 
 const PLATFORMS = [
@@ -75,8 +74,7 @@ export const useMusic = () => {
         }
       }
 
-      // A newer selection was made while this request was in flight.
-      if (requestId !== loadRequestId) return false
+      if (requestId !== loadRequestId) return null
 
       if (playlist.length > 0) {
         songs.value = playlist
@@ -89,7 +87,6 @@ export const useMusic = () => {
         console.error('Load meting songs error:', error)
       }
     } finally {
-      // An older request must not clear the loading indicator for a newer one.
       if (requestId === loadRequestId) {
         loading.value = false
       }
@@ -128,6 +125,7 @@ export const useMusic = () => {
 
   const applyCustomPlaylist = async (p, id) => {
     const ok = await loadMetingSongs(p, id)
+    if (ok === null) return null
     if (!ok) return false
     setPlatform(p)
     setPlaylistId(id)

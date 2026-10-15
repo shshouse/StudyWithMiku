@@ -850,13 +850,18 @@ const applyPlaylist = async () => {
   if (!id) return
   const p = selectedPlatform.value
   const ok = await applyCustomPlaylist(p, id)
+  if (ok === null) return
   if (!ok) { triggerSyncToastText('歌单加载失败', '检查一下歌单ID是否正确'); return }
   refreshPlayerList()
   const existing = customPlaylists.value.find(x => x.platform === p && x.playlistId === id)
   addCustomPlaylist(p, id, existing ? '' : await fetchPlaylistName(p, id))
 }
 const resetPlaylist = async () => { inputPlaylistId.value = ''; await resetToLocal(); refreshPlayerList() }
-const applyRecommendPlaylist = async (item) => { await applyCustomPlaylist(item.platform, item.playlistId); refreshPlayerList() }
+const applyRecommendPlaylist = async (item) => {
+  const ok = await applyCustomPlaylist(item.platform, item.playlistId)
+  if (ok === null) return
+  refreshPlayerList()
+}
 const applyCustomItem = (item) => {
   selectedPlatform.value = item.platform; inputPlaylistId.value = item.playlistId
   return applyRecommendPlaylist(item)
@@ -935,7 +940,8 @@ const playSharedSong = async ({ platform: targetPlatform, playlistId: targetId, 
     return
   }
 
-  await applyCustomPlaylist(targetPlatform, targetId)
+  const ok = await applyCustomPlaylist(targetPlatform, targetId)
+  if (ok === null) return
   if (songs.value.length === 0) {
     triggerSyncToastText('歌单不可用', '')
     return
