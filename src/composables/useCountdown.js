@@ -30,7 +30,7 @@ export function useCountdown() {
   const addCountdown = (title, date) => {
     if (!title.trim() || !date) return false
     if (countdowns.value.length >= MAX_COUNT) return false
-    countdowns.value.push({ id: Date.now(), title: title.trim(), date })
+    countdowns.value.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, title: title.trim(), date })
     persist()
     return true
   }

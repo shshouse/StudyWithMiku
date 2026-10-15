@@ -101,9 +101,7 @@ const getBearerToken = (request) => {
   if (authorization.startsWith('Bearer ')) {
     return authorization.slice(7).trim()
   }
-
-  const url = new URL(request.url)
-  return (url.searchParams.get('token') || '').trim()
+  return ''
 }
 
 const verifyStudyToken = async (token, env) => {
@@ -141,7 +139,8 @@ const verifyStudyToken = async (token, env) => {
     if (payload.aud !== 'study') return null
     if (typeof payload.iat !== 'number') return null
     if (minIat > 0 && payload.iat < minIat) return null
-    if (payload.exp && payload.exp < now) return null
+    // 必须携带未过期的 exp，否则 token 永不过期
+    if (typeof payload.exp !== 'number' || payload.exp <= now) return null
 
     return {
       userId: payload.sub,

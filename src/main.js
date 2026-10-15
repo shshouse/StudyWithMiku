@@ -20,8 +20,11 @@ for (const t of trackers) {
   document.head.appendChild(script)
 }
 
-if (window.location.pathname!=='/'&&!window.location.pathname.includes('.')){
-  window.location.replace('/')//自动回根！
+const base = import.meta.env.BASE_URL || '/'
+const normalizedBase = base.endsWith('/') ? base : `${base}/`
+const currentPath = window.location.pathname
+if (!currentPath.includes('.') && currentPath !== normalizedBase && `${currentPath}/` !== normalizedBase) {
+  window.location.replace(normalizedBase)//自动回根！
 }
 import { createApp } from 'vue'
 import App from './App.vue'

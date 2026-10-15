@@ -1,6 +1,8 @@
 import { ref, onMounted, onUnmounted, watch, unref } from 'vue'
 
 const HISTORY_PAGE_SIZE = 50
+const MAX_MESSAGES = 500
+const HISTORY_LOAD_TIMEOUT = 15000
 
 const normalizeChatMessage = (message) => {
   if (!message || typeof message !== 'object') return null
@@ -51,6 +53,16 @@ export function useOnlineCount(wsUrl, options = {}) {
   let reconnectTimer = null
   let pingTimer = null
   let pendingLoadCursor = null
+  let historyLoadTimer = null
+
+  const clearHistoryLock = () => {
+    isLoadingHistory.value = false
+    pendingLoadCursor = null
+    if (historyLoadTimer) {
+      clearTimeout(historyLoadTimer)
+      historyLoadTimer = null
+    }
+  }
 
   const sendMessage = (payload) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -69,6 +81,8 @@ export function useOnlineCount(wsUrl, options = {}) {
     if (ok) {
       isLoadingHistory.value = true
       pendingLoadCursor = cursor
+      // 服务端无响应时兜底解锁，避免"加载更多"永久禁用
+      historyLoadTimer = setTimeout(clearHistoryLock, HISTORY_LOAD_TIMEOUT)
     }
     return ok
   }
@@ -98,6 +112,10 @@ export function useOnlineCount(wsUrl, options = {}) {
     }
 
     messages.value = dedupAndSort([...messages.value, normalized])
+    // 上限裁剪，仅保留最新消息，防止长会话内存无限增长
+    if (messages.value.length > MAX_MESSAGES) {
+      messages.value = messages.value.slice(-MAX_MESSAGES)
+    }
   }
 
   const sendChatMessage = (content, location = '') => {
@@ -137,8 +155,7 @@ export function useOnlineCount(wsUrl, options = {}) {
               : []
             messages.value = dedupAndSort([...incoming, ...messages.value])
             hasMoreHistory.value = !!data.hasMore
-            isLoadingHistory.value = false
-            pendingLoadCursor = null
+            clearHistoryLock()
           }
           if (data.type === 'history_chunk') {
             const incoming = Array.isArray(data.messages)
@@ -147,8 +164,7 @@ export function useOnlineCount(wsUrl, options = {}) {
             // Prepend older messages, dedup against current list
             messages.value = dedupAndSort([...incoming, ...messages.value])
             hasMoreHistory.value = !!data.hasMore
-            isLoadingHistory.value = false
-            pendingLoadCursor = null
+            clearHistoryLock()
           }
           if (data.type === 'chat') {
             appendMessage(data.message)
@@ -161,8 +177,7 @@ export function useOnlineCount(wsUrl, options = {}) {
             chatError.value = data.message || '连接异常'
             // Release the loading lock so the user can retry/scroll again
             if (data.code === 'rate_limited' && pendingLoadCursor !== null) {
-              isLoadingHistory.value = false
-              pendingLoadCursor = null
+              clearHistoryLock()
             }
           }
         } catch (err) {
@@ -175,8 +190,7 @@ export function useOnlineCount(wsUrl, options = {}) {
         isAuthenticated.value = false
         onlineCount.value = 0
         adminOnline.value = false
-        isLoadingHistory.value = false
-        pendingLoadCursor = null
+        clearHistoryLock()
         console.log('WebSocket disconnected')
         stopPing()
         scheduleReconnect()
@@ -220,6 +234,7 @@ export function useOnlineCount(wsUrl, options = {}) {
       reconnectTimer = null
     }
     stopPing()
+    clearHistoryLock()
     if (ws) {
       ws.close()
       ws = null

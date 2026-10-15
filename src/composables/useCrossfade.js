@@ -650,11 +650,23 @@ export const useCrossfade = () => {
     fadeAnimationId = requestAnimationFrame(inAnim)
   }
 
+  const restoreSetAudio = (ap) => {
+    if (origSetAudio && ap) {
+      try { ap.setAudio = origSetAudio } catch (e) { }
+    }
+    origSetAudio = null
+  }
+
+  const teardown = (ap, onMediaSessionSync) => {
+    cleanup(ap, onMediaSessionSync)
+    restoreSetAudio(ap)
+  }
+
   return {
     crossfadeEnabled,
     toggleCrossfade,
     setupCrossfade,
-    cleanup,
+    cleanup: teardown,
     fadeMusicOut,
     fadeMusicIn
   }

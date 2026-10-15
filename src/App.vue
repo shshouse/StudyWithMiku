@@ -45,11 +45,11 @@
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useFullscreen } from '@vueuse/core'
 import 'aplayer/dist/APlayer.min.css'
-import { preloadVideos } from './utils/cache.js'
+import { preloadVideos, clearCache } from './utils/cache.js'
 import { setAPlayerInstance, setHoveringUI, isHoveringUI } from './utils/eventBus.js'
 import { useMusic } from './composables/useMusic.js'
 import { useCrossfade } from './composables/useCrossfade.js'
-import { getVideoIndex, saveVideoIndex, getMusicIndex, saveMusicIndex } from './utils/userSettings.js'
+import { getVideoIndex, saveVideoIndex, getMusicIndex, saveMusicIndex, getOverlayOpacity } from './utils/userSettings.js'
 import PomodoroTimer from './components/PomodoroTimer.vue'
 
 const APLAYER_SETTINGS_KEY = 'aplayer_settings'
@@ -140,6 +140,8 @@ const onUITouchEnd = () => {
   isHoveringUI.value = false
   startHideTimer()
 }
+
+const overlayOpacity = ref(getOverlayOpacity())
 
 const videoEls = []
 const video2Name = '2.mp4'
@@ -377,9 +379,13 @@ onMounted(() => {
       console.log('所有视频预加载完成')
     } catch (error) {
       console.error('视频预加载失败:', error)
+    } finally {
+      // 预加载仅为预热 HTTP 缓存，释放 video 元素避免常驻内存
+      clearCache('videos')
     }
   }
   let APlayerCtor = null
+  let handleMediaKeys = null
   const loadAPlayer = async () => {
     try {
       if (!APlayerCtor) {
@@ -514,7 +520,7 @@ onMounted(() => {
       }
     }
     
-    const handleMediaKeys = (e) => {
+    handleMediaKeys = (e) => {
       if (!aplayer.value) return
       const activeElement = document.activeElement
       const isInput = activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.isContentEditable
@@ -560,6 +566,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleMediaSessionVisibilityChange)
+  if (handleMediaKeys) {
+    window.removeEventListener('keydown', handleMediaKeys)
+    handleMediaKeys = null
+  }
   if (aplayer.value) {
     cleanupCrossfade(aplayer.value)
     aplayer.value.destroy()

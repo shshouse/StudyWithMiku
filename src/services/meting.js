@@ -53,13 +53,14 @@ export const fetchPlaylist = async (server = 'netease', id = DEFAULT_PLAYLIST_ID
 export const getStoredConfig = () => {
   return {
     platform: localStorage.getItem('music_platform') || 'netease',
-    id: DEFAULT_PLAYLIST_ID
+    id: localStorage.getItem('playlist_id') || localStorage.getItem('music_id') || DEFAULT_PLAYLIST_ID
   }
 }
 
 export const saveConfig = (platform, id) => {
   localStorage.setItem('music_platform', platform)
   localStorage.setItem('music_id', id)
+  localStorage.setItem('playlist_id', id)
 }
 export const PLAYLIST_NAME_API = String(import.meta.env.VITE_WS_URL || '')
   .replace(/^ws/, 'http')

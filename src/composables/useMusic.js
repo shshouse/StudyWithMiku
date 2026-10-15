@@ -123,7 +123,7 @@ export const useMusic = () => {
   const setBitrate = (br) => {
     bitrate.value = br
     localStorage.setItem('music_bitrate', br)
-    loadMetingSongs(platform.value, playlistId.value)
+    return loadMetingSongs(platform.value, playlistId.value)
   }
 
   const applyCustomPlaylist = async (p, id) => {

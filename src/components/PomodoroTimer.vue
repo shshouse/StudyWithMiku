@@ -670,25 +670,22 @@ const inputPlaylistId = ref('')
 const selectedPlatform = ref(platform.value)
 const selectedBitrate = ref(bitrate.value)
 
-watch(selectedBitrate, (newVal) => {
+watch(selectedBitrate, async (newVal) => {
   const ap = getAPlayerInstance()
   const currentIndex = ap ? ap.list.index : -1
   const isPlaying = ap ? !ap.paused : false
-  setBitrate(newVal)
-  const checkAndReplace = () => {
-    const ap2 = getAPlayerInstance()
-    if (ap2 && songs.value.length > 0) {
-      ap2.list.clear()
-      ap2.list.add(songs.value)
-      if (currentIndex >= 0 && currentIndex < songs.value.length) {
-        ap2.list.switch(currentIndex)
-        if (isPlaying) {
-          setTimeout(() => { ap2.play() }, 100)
-        }
+  await setBitrate(newVal)
+  const ap2 = getAPlayerInstance()
+  if (ap2 && songs.value.length > 0) {
+    ap2.list.clear()
+    ap2.list.add(songs.value)
+    if (currentIndex >= 0 && currentIndex < songs.value.length) {
+      ap2.list.switch(currentIndex)
+      if (isPlaying) {
+        setTimeout(() => { ap2.play() }, 100)
       }
     }
   }
-  setTimeout(checkAndReplace, 500)
 })
 const currentTab = ref('pomodoro')
 const currentHitokoto = ref({ text: '', source: '' })
@@ -779,7 +776,7 @@ const addTodo = () => {
     showTodoTip(`最多添加 ${MAX_TODOS} 条待办`)
     return
   }
-  todos.value.unshift({ id: Date.now(), text, completed: false, pinned: false })
+  todos.value.unshift({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, text, completed: false, pinned: false })
   newTodoText.value = ''
   saveTodos()
 }
@@ -826,6 +823,7 @@ const resetLocalStudyData = () => {
   todos.value = []
   saveStats(false)
   saveTodos(false)
+  setCalendarData({ dailyLog: {}, plans: {} })
 }
 const backupLocalStudyData = () => {
   try {
@@ -935,8 +933,8 @@ const playSharedSong = async ({ platform: targetPlatform, playlistId: targetId, 
     return
   }
 
-  await applyCustomPlaylist(targetPlatform, targetId)
-  if (songs.value.length === 0) {
+  const ok = await applyCustomPlaylist(targetPlatform, targetId)
+  if (!ok || songs.value.length === 0) {
     triggerSyncToastText('歌单不可用', '')
     return
   }
@@ -1084,12 +1082,10 @@ const moveToNextPhase = (completedStatus, completedAt) => {
 watch(focusDuration, (newVal) => { if (timerMode.value === 'pomodoro' && currentStatus.value === STATUS.FOCUS && !isRunning.value) timeLeft.value = getPhaseDuration(STATUS.FOCUS); savePomodoroSettings(newVal, breakDuration.value, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
 watch(breakDuration, (newVal) => { if (timerMode.value === 'pomodoro' && currentStatus.value !== STATUS.FOCUS && !isRunning.value) timeLeft.value = getPhaseDuration(currentStatus.value); savePomodoroSettings(focusDuration.value, newVal, pauseMusicDuringBreak.value, hidePomodoroOnIdle.value, showHitokoto.value); triggerSync() })
 watch([pauseMusicDuringBreak], () => { saveCurrentMusicPauseSettings(); triggerSync() })
-watch(hidePomodoroOnIdle, (newVal) => {
-  if (newVal) {
-    document.addEventListener('mousemove', handleGlobalMouseMove)
-  } else {
-    document.removeEventListener('mousemove', handleGlobalMouseMove)
-  }
+// hidePomodoroOnIdle 通过模板 class 绑定实现：
+// 'hidden': hidePomodoroOnIdle && !props.showControls
+// showControls 由 App.vue 根据鼠标活动管理，无需额外 mousemove 监听
+watch(hidePomodoroOnIdle, () => {
   saveCurrentMusicPauseSettings()
   triggerSync()
 })

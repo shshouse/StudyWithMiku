@@ -138,7 +138,8 @@ export function useStudyAuth() {
         if (!token.value) return true
         const payload = getTokenPayload(token.value)
         if (!payload) return true
-        return payload.exp < Math.floor(Date.now() / 1000)
+        if (typeof payload.exp !== 'number') return true
+        return payload.exp <= Math.floor(Date.now() / 1000)
     }
 
     onMounted(() => {
