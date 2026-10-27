@@ -48,6 +48,7 @@ export const quotesList = [
   { text: '不知道说什么的时候,可以选择不说,但不知道吃什么的时候,还是要吃的', source: '我叫苏苏的苦力怕' },//by 我叫苏苏的苦力怕
   { text: '留在港口的船最安全,但是,亲爱的,那不是造船的目的', source: 'Aurora' },//by Aurora
   { text: 'There are the pursued,the pursuing,the busy,and the tired', source: '立身处世,要么被人追求,要么追求别人,要么忙忙碌碌,要么劳累不堪' },//by Yasmin
+  { text: '水洼间轻盈跃动,有如水黾般自如', source: '《夜の踊り子》' }, //by 可爱的1208
 
   // { text: '与其临渊羡鱼，不如退而结网', source: '《汉书》' },
   // { text: '学习是唯一一件，投入越多回报越确定的事情', source: '' },
