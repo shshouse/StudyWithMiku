@@ -7,7 +7,7 @@ const BATCH_FLUSH_DELAY_MS = 150
 const BATCH_LIMIT = 50
 const UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
 
-const MIKUMOD_URL = import.meta.env.VITE_MIKUMOD_URL || 'https://mikumod.com'
+const MIKUMOD_API = import.meta.env.VITE_MIKUMOD_API_URL
 
 const profiles = reactive({})
 const expiresAtMap = new Map()
@@ -64,7 +64,7 @@ const fetchBatch = async (ids) => {
   try {
     // ids 先排序让不同调用者的相同集合命中同一条 CDN 边缘缓存
     const sortedIds = [...ids].sort()
-    const url = `${MIKUMOD_URL}/api/study/profiles?ids=${sortedIds.map(encodeURIComponent).join(',')}`
+    const url = `${MIKUMOD_API}/api/study/profiles?ids=${sortedIds.map(encodeURIComponent).join(',')}`
     const res = await fetch(url, { credentials: 'omit' })
     if (!res.ok) {
       for (const id of ids) setProfile(id, null, NEGATIVE_TTL_MS)

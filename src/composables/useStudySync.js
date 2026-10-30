@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { useStudyAuth } from './useStudyAuth.js'
 
-const MIKUMOD_API = import.meta.env.VITE_MIKUMOD_URL || 'https://mikumod.com'
+const MIKUMOD_API = import.meta.env.VITE_MIKUMOD_API_URL
 
 const syncStatus = ref('idle')
 const lastSyncTime = ref(null)
