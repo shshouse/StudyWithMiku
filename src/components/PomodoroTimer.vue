@@ -483,7 +483,7 @@
   import { useOnlineCount } from '../composables/useOnlineCount.js'
   import { useMusic } from '../composables/useMusic.js'
   import { fetchPlaylistName } from '../services/meting.js'
-  import { duckMusicForNotification, setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
+  import { setHoveringUI, getAPlayerInstance } from '../utils/eventBus.js'
   import { useCrossfade } from '../composables/useCrossfade.js'
   import { useCountdown } from '../composables/useCountdown.js'
   import { getPomodoroSettings, getDefaultPomodoroSettings, savePomodoroSettings, saveMusicPauseSettings, saveTimerSettings, saveNotificationVolume } from '../utils/userSettings.js'
@@ -529,7 +529,7 @@ const { profiles: userProfiles, ensureProfiles } = useUserProfiles()
 const { playlistId, platform, bitrate, applyCustomPlaylist, resetToLocal, songs, customPlaylists, addCustomPlaylist, removeCustomPlaylist, DEFAULT_PLAYLIST_ID, PLATFORMS, BITRATE_OPTIONS, setBitrate } = useMusic()
 const { syncStatus, lastSyncTime, fetchRemoteData, syncOnLogin, pushCalendar, fetchCalendar, pushAll } = useStudySync()
 const { countdowns, addCountdown, deleteCountdown, setCountdowns } = useCountdown()
-const { crossfadeEnabled, toggleCrossfade, fadeMusicOut, fadeMusicIn } = useCrossfade()
+const { crossfadeEnabled, toggleCrossfade, fadeMusicOut, fadeMusicIn, duckMusicForNotification } = useCrossfade()
 const { recordStudyTime: calendarRecordStudy, recordPomodoro: calendarRecordPomodoro, getCalendarData, setCalendarData } = useCalendar()
 
 const showSyncToast = ref(false)

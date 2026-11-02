@@ -1,17 +1,17 @@
 import { ref } from 'vue'
-import { cancelDuck } from '../utils/eventBus.js'
 
 const CROSSFADE_DURATION = 6
 const PRELOAD_LEAD_TIME = 20
 const CROSSFADE_KEY = 'crossfade_enabled'
 const MANUAL_FADE_SEC = 1.5
+const DUCK_FADE_MS = 300
+const DUCK_RATIO = 0.2
 
 const crossfadeEnabled = ref(localStorage.getItem(CROSSFADE_KEY) !== 'false')
 
 let crossfadeAudio = null
 let crossfadeAnimationId = null
 let isCrossfading = false
-let lastGoodVolume = 0.7
 let crossfadeNextIndex = -1
 let origTrigger = null
 let handoffAudio = null
@@ -29,8 +29,14 @@ let isSwapping = false
 let crossfadeTimerId = null
 let overlapPreSwitchedAudio = null
 let watchdogTimer = null
-let userMuted = false
 let handoffFadeTimer = null
+let origVolumeMethod = null
+
+// 用户意图音量：所有程序化淡入淡出都只是临时值，恢复时只认这一个
+let userVolume = null
+let activePlayer = null
+let duckActive = false
+let duckRestoreTimer = null
 
 export const useCrossfade = () => {
   const toggleCrossfade = (val) => {
@@ -47,11 +53,33 @@ export const useCrossfade = () => {
     ap._mikuSuppressVolumeSaveUntil = Math.max(ap._mikuSuppressVolumeSaveUntil || 0, Date.now() + duration)
   }
 
+  const rememberUserVolume = (volume) => {
+    if (Number.isFinite(volume)) userVolume = clampVolume(volume)
+  }
+
+  const getUserVolume = (ap) => {
+    if (userVolume === null) {
+      const current = ap?.audio?.volume
+      userVolume = Number.isFinite(current) ? clampVolume(current) : 0.7
+    }
+    return userVolume
+  }
+
   const setPlayerVolume = (ap, volume, duration = 500) => {
     if (!ap?.audio) return
     suppressVolumeSave(ap, duration)
     ap.audio.volume = clampVolume(volume)
   }
+
+  const restoreUserVolume = (ap) => {
+    if (!ap?.audio) return
+    const target = getUserVolume(ap)
+    if (Math.abs(ap.audio.volume - target) > 0.001) setPlayerVolume(ap, target)
+  }
+
+  const isProgramControllingVolume = () =>
+    isCrossfading || isHandingOff || !!handoffAudio || !!crossfadeAudio ||
+    fadeAnimationId !== null || crossfadeAnimationId !== null || crossfadeTimerId !== null || isSwapping || duckActive
 
   const clearCrossfadeEndFallback = () => {
     if (crossfadeEndFallbackTimer) {
@@ -117,16 +145,12 @@ export const useCrossfade = () => {
     isHandingOff = false
     isSwapping = false
     overlapPreSwitchedAudio = null
-    setPlayerVolume(ap, lastGoodVolume)
+    setPlayerVolume(ap, getUserVolume(ap))
     isCrossfading = false
     crossfadeNextIndex = -1
     restoreTrigger(ap)
     if (typeof onMediaSessionSync === 'function') onMediaSessionSync()
   }
-
-  const isProgramControllingVolume = () =>
-    isCrossfading || isHandingOff || !!handoffAudio || !!crossfadeAudio ||
-    fadeAnimationId !== null || crossfadeAnimationId !== null || crossfadeTimerId !== null || isSwapping
 
   const interceptTrigger = (ap, onMediaSessionSync) => {
     if (origTrigger) return
@@ -163,11 +187,12 @@ export const useCrossfade = () => {
       seamlessReadyAudio = null
       seamlessReadyUrl = ''
       isSwapping = true
-      const mainVolume = main.volume
-      takeOver.volume = mainVolume
+      const startVolume = main.volume
+      const targetVolume = getUserVolume(ap)
+      takeOver.volume = startVolume
       const p = takeOver.play()
       if (p && p.catch) p.catch(() => { })
-      main.volume = 0
+      setPlayerVolume(ap, 0, 5000)
       origSetAudio(nextAudio)
       const swapStart = Date.now()
       const SWAP_MS = 400
@@ -179,8 +204,7 @@ export const useCrossfade = () => {
         clearInterval(swapTimer)
         takeOver.pause()
         takeOver.src = ''
-        main.volume = mainVolume
-        suppressVolumeSave(ap, 800)
+        setPlayerVolume(ap, getUserVolume(ap), 800)
         if (main.paused && !main.ended) {
           const rp = main.play()
           if (rp && rp.catch) rp.catch(() => { })
@@ -190,8 +214,8 @@ export const useCrossfade = () => {
       const swapTimer = setInterval(() => {
         if (swapDone || !takeOver.src) { finishSwap(); return }
         const progress = Math.min((Date.now() - swapStart) / SWAP_MS, 1)
-        main.volume = clampVolume(mainVolume * progress)
-        takeOver.volume = clampVolume(mainVolume * (1 - progress))
+        setPlayerVolume(ap, targetVolume * progress, 1000)
+        takeOver.volume = clampVolume(targetVolume * (1 - progress))
         if (progress >= 1) finishSwap()
       }, 50)
       setTimeout(finishSwap, 2000)
@@ -220,7 +244,7 @@ export const useCrossfade = () => {
     crossfadeAudio = null
     isCrossfading = false
     crossfadeNextIndex = -1
-    tempAudio.volume = lastGoodVolume
+    tempAudio.volume = getUserVolume(ap)
     destroySeamlessReady()
 
     if (crossfadeAnimationId || crossfadeTimerId) {
@@ -265,7 +289,7 @@ export const useCrossfade = () => {
       handoffAudio.pause()
       handoffAudio.src = ''
       handoffAudio = null
-      setPlayerVolume(ap, lastGoodVolume)
+      restoreUserVolume(ap)
       isHandingOff = false
       if (!ap.audio.paused) {
         try {
@@ -287,12 +311,13 @@ export const useCrossfade = () => {
         } catch (e) { }
       }
       if (document.visibilityState !== 'visible') {
-        setPlayerVolume(ap, lastGoodVolume)
+        setPlayerVolume(ap, getUserVolume(ap))
         handoffAudio.volume = 0
         finishHandoff()
         return
       }
       const startVol = handoffAudio.volume
+      const targetVolume = getUserVolume(ap)
       const start = Date.now()
       const FADE_MS = 400
       if (handoffFadeTimer) clearInterval(handoffFadeTimer)
@@ -300,7 +325,7 @@ export const useCrossfade = () => {
         if (handoffDone) { clearInterval(handoffFadeTimer); handoffFadeTimer = null; return }
         const p = Math.min((Date.now() - start) / FADE_MS, 1)
         if (handoffAudio) handoffAudio.volume = ap.audio.paused ? startVol : clampVolume(startVol * (1 - p))
-        setPlayerVolume(ap, lastGoodVolume * p, 1000)
+        setPlayerVolume(ap, targetVolume * p, 1000)
         if (p >= 1) finishHandoff()
       }, 50)
     }
@@ -348,9 +373,9 @@ export const useCrossfade = () => {
     handoffFallbackTimer = setTimeout(() => finishHandoff(), 7000)
     armHandoff()
   }
-  const beginFade = (ap, durationMs) => {
+  const beginFade = (ap, durationMs, startVolume, targetVolume) => {
     clearFadeAnim()
-    setPlayerVolume(ap, lastGoodVolume, 8000)
+    setPlayerVolume(ap, startVolume, 8000)
     if (crossfadeAudio) crossfadeAudio.volume = 0
     const startTime = Date.now()
     const animate = () => {
@@ -360,9 +385,9 @@ export const useCrossfade = () => {
         ? 2 * progress * progress
         : 1 - Math.pow(-2 * progress + 2, 2) / 2
 
-      setPlayerVolume(ap, lastGoodVolume * (1 - ease), 8000)
+      setPlayerVolume(ap, startVolume * (1 - ease), 8000)
       if (crossfadeAudio) {
-        crossfadeAudio.volume = clampVolume(lastGoodVolume * ease)
+        crossfadeAudio.volume = clampVolume(targetVolume * ease)
       }
 
       if (progress >= 1) {
@@ -391,9 +416,11 @@ export const useCrossfade = () => {
 
     isCrossfading = true
     crossfadeNextIndex = nextIndex
-    lastGoodVolume = audio.volume
+    cancelDuck()
     interceptTrigger(ap, onMediaSessionSync)
 
+    const startVolume = audio.volume
+    const targetVolume = getUserVolume(ap)
     const nextSong = ap.list.audios[nextIndex]
     if (preloadedAudioEl && preloadedForIndex === nextIndex) {
       crossfadeAudio = preloadedAudioEl
@@ -405,13 +432,13 @@ export const useCrossfade = () => {
       crossfadeAudio.preload = 'auto'
     }
     crossfadeAudio.currentTime = 0
-    crossfadeAudio.volume = clampVolume(lastGoodVolume * 0.5)
+    crossfadeAudio.volume = clampVolume(targetVolume * 0.5)
     crossfadeAudio.play().catch(() => {
       cleanup(ap, onMediaSessionSync)
     })
 
     const duration = Math.max(0.2, Math.min(CROSSFADE_DURATION, remaining)) * 1000
-    beginFade(ap, duration)
+    beginFade(ap, duration, startVolume, targetVolume)
     crossfadeEndFallbackTimer = setTimeout(() => {
       if (isCrossfading && crossfadeAudio) {
         handleCrossfadeEnd(ap, onMediaSessionSync)
@@ -445,11 +472,13 @@ export const useCrossfade = () => {
     isCrossfading = true
     crossfadeNextIndex = idx
     overlapPreSwitchedAudio = nextAudio
-    lastGoodVolume = main.volume
+    cancelDuck()
     interceptTrigger(ap, onMediaSessionSync)
     crossfadeAudio = el
+    const startVolume = main.volume
+    const targetVolume = getUserVolume(ap)
     try { el.currentTime = 0 } catch (e) { }
-    el.volume = clampVolume(lastGoodVolume * 0.5)
+    el.volume = clampVolume(targetVolume * 0.5)
     const start = Date.now()
     const p = el.play()
     if (p && p.catch) p.catch(() => { })
@@ -459,7 +488,7 @@ export const useCrossfade = () => {
       origSetAudio(nextAudio)
     } else {
       const fadeMs = MANUAL_FADE_SEC * 1000
-      beginFade(ap, fadeMs)
+      beginFade(ap, fadeMs, startVolume, targetVolume)
     }
 
     const fire = () => {
@@ -478,27 +507,32 @@ export const useCrossfade = () => {
     return true
   }
 
+  const interceptVolume = (ap) => {
+    if (origVolumeMethod) return
+    origVolumeMethod = ap.volume.bind(ap)
+    ap.volume = (percentage, nostorage) => {
+      const result = origVolumeMethod(percentage, nostorage)
+      // APlayer 的音量条与音量图标最终都走这里，视为用户意图
+      if (Number.isFinite(parseFloat(percentage))) rememberUserVolume(ap.audio.volume)
+      return result
+    }
+  }
+
   const setupCrossfade = (ap, onMediaSessionSync) => {
     let crossfadeTriggered = false
+    activePlayer = ap
     interceptSetAudio(ap, onMediaSessionSync)
-
-   ap.on('volumechange', () => {
-      if (Date.now() < (ap._mikuSuppressVolumeSaveUntil || 0)) return
-      if (ap.audio.volume > 0) {
-        lastGoodVolume = ap.audio.volume
-        userMuted = false
-      } else {
-        userMuted = true
-      }
-    })
+    interceptVolume(ap)
+    rememberUserVolume(ap.audio.volume)
 
     if (!watchdogTimer) {
       watchdogTimer = setInterval(() => {
         const a = ap.audio
-        if (!a || a.paused || userMuted) return
-        if (!isProgramControllingVolume() && a.volume === 0) {
-          console.warn('[useCrossfade] 播放中音量卡 0，恢复到', lastGoodVolume)
-          setPlayerVolume(ap, lastGoodVolume)
+        if (!a || a.paused || isProgramControllingVolume()) return
+        const target = getUserVolume(ap)
+        if (Math.abs(a.volume - target) > 0.02) {
+          console.warn('[useCrossfade] 播放音量与用户设置不一致，已恢复', a.volume.toFixed(2), '->', target)
+          setPlayerVolume(ap, target)
         }
       }, 4000)
     }
@@ -596,22 +630,27 @@ export const useCrossfade = () => {
       }
       if (crossfadeAudio) crossfadeAudio.play().catch(() => { })
       if (handoffAudio) handoffAudio.play().catch(() => { })
-      if (ap.audio.volume === 0 && !isProgramControllingVolume()) {
-        setPlayerVolume(ap, lastGoodVolume)
-      }
+      if (!isProgramControllingVolume()) restoreUserVolume(ap)
     })
   }
 
   const shouldAnimateAudio = () => typeof document === 'undefined' || document.visibilityState === 'visible'
 
+  const playIfPaused = (ap) => {
+    if (!ap.audio.paused) return
+    try {
+      const p = ap.play()
+      if (p && p.catch) p.catch(() => { })
+    } catch (e) { }
+  }
+
   const fadeMusicOut = (ap, durationInSec = 2, options = {}) => {
     if (!ap || ap.audio.paused) return
-    if (isCrossfading || handoffAudio) cleanup(ap)
+    if (isCrossfading || isHandingOff || handoffAudio) cleanup(ap)
     cancelDuck()
     if (fadeAnimationId) { cancelAnimationFrame(fadeAnimationId); fadeAnimationId = null }
     clearFadeAnim()
-    const origVol = ap.audio.volume
-    ap._fadeLastVolume = origVol
+    const startVolume = ap.audio.volume
     if (options.immediate || !shouldAnimateAudio()) {
       setPlayerVolume(ap, 0)
       try { ap.pause() } catch (e) { }
@@ -621,7 +660,7 @@ export const useCrossfade = () => {
     const tgt = durationInSec * 1000
     const outAnim = () => {
       const p = Math.min((Date.now() - start) / tgt, 1)
-      setPlayerVolume(ap, Math.max(0, origVol * (1 - p)))
+      setPlayerVolume(ap, Math.max(0, startVolume * (1 - p)))
       if (p < 1) fadeAnimationId = requestAnimationFrame(outAnim)
       else { fadeAnimationId = null; ap.pause() }
     }
@@ -631,23 +670,65 @@ export const useCrossfade = () => {
   const fadeMusicIn = (ap, targetVol = null, durationInSec = 2, options = {}) => {
     if (!ap) return
     if (fadeAnimationId) { cancelAnimationFrame(fadeAnimationId); fadeAnimationId = null }
-    const finalVol = targetVol !== null ? targetVol : (ap._fadeLastVolume || ap.audio.volume || 0.7)
-    if (options.immediate || !shouldAnimateAudio()) {
+    const getTarget = () => (targetVol !== null ? clampVolume(targetVol) : getUserVolume(ap))
+    const finalVol = getTarget()
+    // 目标为 0 或临近结尾时不做从 0 淡入，避免与交叉淡化抢同一个音量
+    const remaining = ap.audio.duration - ap.audio.currentTime
+    if (options.immediate || !shouldAnimateAudio() || finalVol <= 0 || (Number.isFinite(remaining) && remaining <= CROSSFADE_DURATION + 1)) {
       setPlayerVolume(ap, finalVol)
-      if (ap.audio.paused) { try { const p = ap.play(); if (p && p.catch) p.catch(() => { }) } catch (e) { } }
+      playIfPaused(ap)
       return
     }
     setPlayerVolume(ap, 0)
-    if (ap.audio.paused) { try { const p = ap.play(); if (p && p.catch) p.catch(() => {}) } catch(e) {} }
+    playIfPaused(ap)
     const start = Date.now()
     const tgt = durationInSec * 1000
     const inAnim = () => {
+      if (isCrossfading || isHandingOff) { fadeAnimationId = null; return }
       const p = Math.min((Date.now() - start) / tgt, 1)
-      setPlayerVolume(ap, finalVol * p)
+      setPlayerVolume(ap, getTarget() * p)
       if (p < 1) fadeAnimationId = requestAnimationFrame(inAnim)
       else fadeAnimationId = null
     }
     fadeAnimationId = requestAnimationFrame(inAnim)
+  }
+
+  const clearDuckRestoreTimer = () => {
+    if (duckRestoreTimer) {
+      clearTimeout(duckRestoreTimer)
+      duckRestoreTimer = null
+    }
+  }
+
+  const cancelDuck = () => {
+    duckActive = false
+    clearDuckRestoreTimer()
+  }
+
+  const duckMusicForNotification = (notificationDuration = 3000) => {
+    const ap = activePlayer
+    if (!ap?.audio || ap.audio.paused) return
+    if (isProgramControllingVolume()) return
+    const target = getUserVolume(ap)
+    if (target <= 0) return
+    clearDuckRestoreTimer()
+    duckActive = true
+    const from = ap.audio.volume
+    const to = target * DUCK_RATIO
+    const start = Date.now()
+    const fadeTimer = setInterval(() => {
+      if (!duckActive) { clearInterval(fadeTimer); return }
+      const p = Math.min((Date.now() - start) / DUCK_FADE_MS, 1)
+      setPlayerVolume(ap, from + (to - from) * p)
+      if (p < 1) return
+      clearInterval(fadeTimer)
+      duckRestoreTimer = setTimeout(() => {
+        duckRestoreTimer = null
+        duckActive = false
+        if (!ap || isProgramControllingVolume()) return
+        restoreUserVolume(ap)
+      }, notificationDuration)
+    }, 20)
   }
 
   return {
@@ -656,6 +737,7 @@ export const useCrossfade = () => {
     setupCrossfade,
     cleanup,
     fadeMusicOut,
-    fadeMusicIn
+    fadeMusicIn,
+    duckMusicForNotification
   }
 }
