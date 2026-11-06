@@ -3,9 +3,10 @@ import { ref } from 'vue'
 const STORAGE_KEY = 'crossfade_enabled'
 const END_FADE_SEC = 6
 const PRELOAD_LEAD_SEC = 20
-const MANUAL_FADE_SEC = 1.5
-const HANDOFF_FADE_MS = 400
-const HANDOFF_READY_MS = 3000
+const SWITCH_OUT_MS = 250
+const SWITCH_IN_MS = 400
+const READY_TIMEOUT_MS = 3000
+const SEEK_TIMEOUT_MS = 1200
 const HANDOFF_TIMEOUT_MS = 5000
 const DUCK_FADE_MS = 300
 const DUCK_RATIO = 0.2
@@ -25,8 +26,7 @@ let duck = null
 let pauseGuardUntil = 0
 
 const fade = {
-  phase: 'idle', // idle | fade | handoff
-  mode: '', // end | manual
+  phase: 'idle', // idle | fade | handoff | switch
   shadow: null,
   nextIndex: -1,
   pending: null,
@@ -66,6 +66,11 @@ const restoreVolume = (ap) => {
   if (!ap?.audio) return
   const target = userTargetVolume(ap)
   if (Math.abs(ap.audio.volume - target) > 0.001) setVolume(ap, target)
+}
+
+// 歌词只读主音源的时间，交接后立刻按真实位置刷新一次
+const syncLrc = (ap) => {
+  try { ap?.lrc?.update?.() } catch (e) { }
 }
 
 const later = (fn, ms) => {
@@ -156,7 +161,6 @@ const settle = ({ apply = true } = {}) => {
   clearTimers()
   releaseShadow()
   fade.phase = 'idle'
-  fade.mode = ''
   fade.nextIndex = -1
   fade.pending = null
   fade.deadline = 0
@@ -189,7 +193,7 @@ const waitReady = (audio, done) => {
   }
   audio.addEventListener('loadedmetadata', finish, { once: true })
   audio.addEventListener('canplay', finish, { once: true })
-  later(finish, HANDOFF_READY_MS)
+  later(finish, READY_TIMEOUT_MS)
 }
 
 const seekTo = (audio, time, done) => {
@@ -210,23 +214,7 @@ const seekTo = (audio, time, done) => {
     return
   }
   audio.addEventListener('seeked', finish, { once: true })
-  later(finish, 1200)
-}
-
-const applyTarget = (ap) => {
-  pauseGuardUntil = nowMs() + 800
-  internalSwitch = true
-  try {
-    if (fade.mode === 'manual') {
-      const pending = fade.pending
-      fade.pending = null
-      if (pending && applyAudio) applyAudio(pending)
-    } else {
-      ap.list.switch(fade.nextIndex)
-    }
-  } finally {
-    internalSwitch = false
-  }
+  later(finish, SEEK_TIMEOUT_MS)
 }
 
 const handoff = (ap) => {
@@ -239,9 +227,15 @@ const handoff = (ap) => {
   }
 
   fade.phase = 'handoff'
-  fade.deadline = nowMs() + HANDOFF_READY_MS + HANDOFF_TIMEOUT_MS
+  fade.deadline = nowMs() + READY_TIMEOUT_MS + HANDOFF_TIMEOUT_MS
   setVolume(ap, 0, HANDOFF_TIMEOUT_MS + 1000)
-  applyTarget(ap)
+  pauseGuardUntil = nowMs() + 800
+  internalSwitch = true
+  try {
+    ap.list.switch(fade.nextIndex)
+  } finally {
+    internalSwitch = false
+  }
 
   const target = userTargetVolume(ap)
   const resumeAt = shadow.currentTime
@@ -251,10 +245,11 @@ const handoff = (ap) => {
     if (fade.phase !== 'handoff' || fade.shadow !== shadow) return
     seekTo(main, resumeAt, () => {
       if (fade.phase !== 'handoff' || fade.shadow !== shadow) return
+      syncLrc(ap)
       if (main.paused && !userPaused) {
         try { ap.play() } catch (e) { }
       }
-      animate(HANDOFF_FADE_MS, (progress) => {
+      animate(SWITCH_IN_MS, (progress) => {
         setVolume(ap, target * progress, 1000)
         if (fade.shadow === shadow) shadow.volume = clampVolume(shadowFrom * (1 - progress))
       }, () => settle({ apply: false }))
@@ -262,9 +257,9 @@ const handoff = (ap) => {
   })
 }
 
-const beginFade = (ap, { mode, pending, nextIndex, durationMs }) => {
+const beginEndFade = (ap, nextIndex, durationMs) => {
   const main = ap?.audio
-  const audio = pending || ap?.list?.audios?.[nextIndex]
+  const audio = ap?.list?.audios?.[nextIndex]
   if (!main || !audio?.url) {
     settle({ apply: true })
     return
@@ -272,11 +267,10 @@ const beginFade = (ap, { mode, pending, nextIndex, durationMs }) => {
 
   const shadow = takePreloaded(audio.url, nextIndex) || createAudio(audio.url)
   fade.phase = 'fade'
-  fade.mode = mode
   fade.shadow = shadow
   fade.nextIndex = nextIndex
-  fade.pending = mode === 'manual' ? pending : null
-  fade.deadline = nowMs() + durationMs + HANDOFF_READY_MS + HANDOFF_TIMEOUT_MS + 2000
+  fade.pending = null
+  fade.deadline = nowMs() + durationMs + READY_TIMEOUT_MS + HANDOFF_TIMEOUT_MS + 2000
 
   try { shadow.currentTime = 0 } catch (e) { }
   shadow.volume = 0
@@ -289,10 +283,47 @@ const beginFade = (ap, { mode, pending, nextIndex, durationMs }) => {
 
   const startVolume = main.volume
   const target = userTargetVolume(ap)
+  // 与旧实现相同的 easeInOutQuad 曲线，听感不变
   animate(durationMs, (progress) => {
-    setVolume(ap, startVolume * (1 - progress), durationMs + 1000)
-    shadow.volume = clampVolume(target * progress)
+    const eased = progress < 0.5
+      ? 2 * progress * progress
+      : 1 - Math.pow(-2 * progress + 2, 2) / 2
+    setVolume(ap, startVolume * (1 - eased), durationMs + 1000)
+    shadow.volume = clampVolume(target * eased)
   }, () => handoff(ap))
+}
+
+const beginSwitch = (ap, nextAudio) => {
+  const main = ap.audio
+  const startVolume = main.volume
+  const target = userTargetVolume(ap)
+  fade.phase = 'switch'
+  fade.shadow = null
+  fade.nextIndex = -1
+  fade.pending = nextAudio
+  fade.deadline = nowMs() + SWITCH_OUT_MS + SWITCH_IN_MS + 4000
+
+  animate(SWITCH_OUT_MS, (progress) => {
+    setVolume(ap, startVolume * (1 - progress), SWITCH_OUT_MS + 600)
+  }, () => {
+    if (fade.phase !== 'switch') return
+    const pending = fade.pending
+    fade.pending = null
+    if (pending && applyAudio) {
+      pauseGuardUntil = nowMs() + 800
+      internalSwitch = true
+      try {
+        applyAudio(pending)
+      } finally {
+        internalSwitch = false
+      }
+    }
+    setVolume(ap, 0, 1000)
+    animate(SWITCH_IN_MS, (progress) => {
+      if (fade.phase !== 'switch') return
+      setVolume(ap, target * progress, 800)
+    }, () => settle({ apply: false }))
+  })
 }
 
 const reconcile = () => {
@@ -337,12 +368,7 @@ const onTimeupdate = () => {
     preload = { el: createAudio(next.url), index, url: next.url }
   }
   if (longEnough && !audio.paused && remaining <= END_FADE_SEC && remaining > 0.5) {
-    beginFade(ap, {
-      mode: 'end',
-      pending: null,
-      nextIndex: index,
-      durationMs: Math.max(200, Math.min(END_FADE_SEC, remaining) * 1000)
-    })
+    beginEndFade(ap, index, Math.max(200, Math.min(END_FADE_SEC, remaining) * 1000))
   }
 }
 
@@ -376,8 +402,9 @@ const interceptTrigger = (ap) => {
   const original = ap.events.trigger.bind(ap.events)
   ap._mikuCrossfadeTrigger = original
   ap.events.trigger = (event, data) => {
-    if (event === 'ended' && fade.phase === 'fade') {
-      handoff(ap)
+    if (event === 'ended' && !isIdle()) {
+      // 结尾淡化的交接由过渡自己完成；切歌途中歌曲结束则直接交给切换
+      if (fade.phase === 'fade') handoff(ap)
       return
     }
     // 换源和歌曲结束都会让浏览器补发 pause，两者都不是用户意图。
@@ -393,26 +420,18 @@ const interceptSetAudio = (ap) => {
   ap._mikuCrossfadeSetAudio = original
   applyAudio = original
   ap.setAudio = (nextAudio) => {
-    if (internalSwitch) {
+    if (internalSwitch || !crossfadeEnabled.value) {
       original(nextAudio)
       return
     }
-    // 过渡没结束又收到新的切歌请求：直接cut，保证 APlayer 的状态始终跟着用户走
-    if (!isIdle()) {
-      settle({ apply: false })
-      original(nextAudio)
-      return
-    }
+    // 过渡没结束又收到新的切歌请求：先收敛，再按新目标重新开始
+    if (!isIdle()) settle({ apply: true })
     const main = ap.audio
-    const list = ap.list?.audios || []
-    const index = nextAudio ? list.indexOf(nextAudio) : -1
-    const canOverlap = crossfadeEnabled.value && !!nextAudio?.url && !!main &&
-      !main.paused && list.length > 1 && index >= 0
-    if (!canOverlap) {
+    if (!main || main.paused || !nextAudio?.url) {
       original(nextAudio)
       return
     }
-    beginFade(ap, { mode: 'manual', pending: nextAudio, nextIndex: index, durationMs: MANUAL_FADE_SEC * 1000 })
+    beginSwitch(ap, nextAudio)
   }
 }
 
