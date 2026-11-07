@@ -258,6 +258,7 @@ export class OnlineCounter {
   constructor(state, env) {
     this.state = state
     this.env = env
+    this.pendingChatMessages = new WeakSet()
   }
 
   getSessionMeta(ws) {
@@ -443,7 +444,7 @@ export class OnlineCounter {
     }
 
     const now = Date.now()
-    if (meta.lastMessageAt && now - meta.lastMessageAt < CHAT_THROTTLE_MS) {
+    if (this.pendingChatMessages.has(ws) || (meta.lastMessageAt && now - meta.lastMessageAt < CHAT_THROTTLE_MS)) {
       this.sendError(ws, 'rate_limited', '发送太频繁了')
       return
     }
@@ -460,15 +461,25 @@ export class OnlineCounter {
       createdAt: new Date(now).toISOString(),
     }
 
-    this.setSessionMeta(ws, {
-      username,
-      lastMessageAt: now,
-    })
-    await this.saveMessage(chatMessage, now)
-    this.broadcast({
-      type: 'chat',
-      message: chatMessage,
-    })
+    this.pendingChatMessages.add(ws)
+    try {
+      const saved = await this.saveMessage(chatMessage, now)
+      if (!saved) {
+        this.sendError(ws, 'persistence_failed', '消息保存失败，请稍后重试')
+        return
+      }
+
+      this.setSessionMeta(ws, {
+        username,
+        lastMessageAt: now,
+      })
+      this.broadcast({
+        type: 'chat',
+        message: chatMessage,
+      })
+    } finally {
+      this.pendingChatMessages.delete(ws)
+    }
   }
 
   getPresence() {
@@ -566,7 +577,7 @@ export class OnlineCounter {
   }
 
   async saveMessage(message, createdAt) {
-    if (!this.env.CHAT_DB) return
+    if (!this.env.CHAT_DB) return false
 
     try {
       await this.env.CHAT_DB.batch([
@@ -584,8 +595,10 @@ export class OnlineCounter {
           `)
           .bind(message.id, CHAT_ROOM_ID, message.userId, message.username, message.content, createdAt, message.location || ''),
       ])
+      return true
     } catch (err) {
       console.error('D1 save error:', err)
+      return false
     }
   }
 }
