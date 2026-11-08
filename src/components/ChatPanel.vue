@@ -39,7 +39,7 @@
           v-for="group in groupedMessages"
           :key="group.key"
           class="chat-message-group"
-          :class="{ own: group.messages[0].userId && group.messages[0].userId === currentUserId, 'chat-pending': group.pending }"
+          :class="{ own: group.messages[0].userId && group.messages[0].userId === currentUserId }"
         >
           <div
             class="chat-avatar"
@@ -64,17 +64,18 @@
               <span v-if="getGroupLocation(group.messages)" class="chat-message-location">{{ getGroupLocation(group.messages) }}</span>
               <span class="chat-message-time-date">{{ formatChatTime(group.messages[0].createdAt).datePart }}</span>
               <span class="chat-message-time-hm">{{ formatChatTime(group.messages[0].createdAt).timePart }}</span>
-              <span v-if="group.pending" class="chat-pending-status">发送中</span>
+              <span v-if="group.messages[group.messages.length - 1].pending" class="chat-pending-status">发送中</span>
             </div>
             <div
               v-for="message in group.messages"
               :key="message.id"
               :data-mid="message.id"
               class="chat-message-item"
+              :class="{ 'chat-pending': message.pending }"
             >
               <div class="chat-message-actions">
                 <button
-                  v-if="!group.pending"
+                  v-if="!message.pending"
                   type="button"
                   class="chat-reply-btn"
                   title="回复"
@@ -367,11 +368,7 @@ const groupedMessages = computed(() => {
     const bId = b.userId || b.username || ''
     return aId && bId && aId === bId
   }
-  for (const message of list) {
-    const parsed = parseReplyMessage(message.content)
-    const enriched = parsed
-      ? { ...message, content: parsed.text, replyToId: parsed.replyToId }
-      : message
+  const append = (enriched) => {
     if (current && sameUser(current.messages[current.messages.length - 1], enriched)) {
       current.messages.push(enriched)
     } else {
@@ -379,21 +376,24 @@ const groupedMessages = computed(() => {
       groups.push(current)
     }
   }
+  for (const message of list) {
+    const parsed = parseReplyMessage(message.content)
+    append(parsed
+      ? { ...message, content: parsed.text, replyToId: parsed.replyToId }
+      : message)
+  }
   for (const item of props.pendingMessages) {
     const parsed = parseReplyMessage(item.content)
-    groups.push({
-      key: item.clientId,
-      pending: item.status,
-      messages: [{
-        id: item.clientId,
-        clientId: item.clientId,
-        userId: props.currentUserId,
-        username: props.currentUsername,
-        content: parsed ? parsed.text : item.content,
-        replyToId: parsed ? parsed.replyToId : '',
-        createdAt: new Date(item.createdAt).toISOString(),
-        location: item.location,
-      }],
+    append({
+      id: item.clientId,
+      clientId: item.clientId,
+      userId: props.currentUserId,
+      username: props.currentUsername,
+      content: parsed ? parsed.text : item.content,
+      replyToId: parsed ? parsed.replyToId : '',
+      createdAt: new Date(item.createdAt).toISOString(),
+      location: item.location,
+      pending: true,
     })
   }
   return groups
@@ -1059,7 +1059,7 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   z-index: 2;
 }
 .chat-message-item:hover .chat-message-actions { opacity: 1; }
-.chat-message-group.chat-pending .chat-message-bubble { opacity: 0.75; }
+.chat-message-item.chat-pending { opacity: 0.75; }
 .chat-pending-status {
   flex-shrink: 0;
   color: rgba(255, 255, 255, 0.45);
