@@ -37,16 +37,22 @@ export function useStudySync({ onDataMerged } = {}) {
         return currentUserId
     }
 
-    const requireSnapshot = (data) => {
+    // 老接口没有 revision 字段，此时按旧协议整份写入，不做冲突合并
+    const readSnapshot = (data) => {
         if (!data) return null
-        if (!isRevision(data.revision)) throw new Error('远端数据缺少版本号')
         return {
             stats: data.stats ?? {},
             todos: Array.isArray(data.todos) ? data.todos : [],
             settings: data.settings ?? {},
-            revision: data.revision,
+            revision: isRevision(data.revision) ? data.revision : null,
             updated_at: data.updated_at,
         }
+    }
+
+    const requireRevisionSnapshot = (data, message) => {
+        const snapshot = readSnapshot(data)
+        if (!snapshot || !isRevision(snapshot.revision)) throw new Error(message)
+        return snapshot
     }
 
     const fetchRemoteData = async () => {
@@ -66,9 +72,9 @@ export function useStudySync({ onDataMerged } = {}) {
             if (!res.ok) throw new Error(`远端数据读取失败: ${res.status}`)
 
             const result = await res.json()
-            const data = requireSnapshot(result.data)
+            const data = readSnapshot(result.data)
             if (syncUserId === currentUserId) {
-                baseline = { data: data ? clone(data) : null, revision: data?.revision ?? 0 }
+                baseline = { data: data ? clone(data) : null, revision: data ? data.revision : 0 }
             }
             return data
         } catch (error) {
@@ -97,8 +103,7 @@ export function useStudySync({ onDataMerged } = {}) {
 
             if (res.status === 409) {
                 const conflict = await res.json().catch(() => null)
-                const remote = requireSnapshot(conflict?.data)
-                if (!remote) throw new Error('同步冲突缺少远端数据')
+                const remote = requireRevisionSnapshot(conflict?.data, '同步冲突缺少远端数据')
 
                 snapshot = mergeStudyData(base?.data, snapshot, remote)
                 if (onDataMerged) onDataMerged(clone(snapshot))
@@ -113,8 +118,8 @@ export function useStudySync({ onDataMerged } = {}) {
             if (!res.ok) throw new Error(`远端数据保存失败: ${res.status}`)
 
             const result = await res.json()
-            const saved = requireSnapshot(result.data)
-            if (!saved || saved.revision <= revision) throw new Error('远端数据保存结果异常')
+            const saved = requireRevisionSnapshot(result.data, '远端数据保存结果异常')
+            if (saved.revision <= revision) throw new Error('远端数据保存结果异常')
             if (syncUserId === currentUserId) {
                 baseline = { data: clone(saved), revision: saved.revision }
             }
@@ -124,10 +129,32 @@ export function useStudySync({ onDataMerged } = {}) {
         throw new Error('同步冲突重试次数过多')
     }
 
+    const saveLegacy = async (snapshot, headers, currentUserId) => {
+        const res = await fetch(`${MIKUMOD_API}/api/study/data`, {
+            method: 'PUT',
+            headers,
+            cache: 'no-store',
+            body: JSON.stringify(snapshot),
+        })
+
+        if (res.status === 401) {
+            markSessionExpired()
+            throw new Error('登录状态已失效')
+        }
+        if (!res.ok) throw new Error(`远端数据保存失败: ${res.status}`)
+
+        const result = await res.json().catch(() => null)
+        const saved = readSnapshot(result?.data)
+        if (saved && syncUserId === currentUserId) {
+            baseline = { data: clone(saved), revision: saved.revision }
+        }
+        return true
+    }
+
     const pushData = (stats, todos, settings) => {
         if (!isLoggedIn.value) return Promise.resolve(false)
         const currentUserId = ensureUserState()
-        if (!baseline || baseline.revision === null) {
+        if (!baseline) {
             syncStatus.value = 'error'
             return Promise.resolve(false)
         }
@@ -145,7 +172,10 @@ export function useStudySync({ onDataMerged } = {}) {
             }
             try {
                 syncStatus.value = 'syncing'
-                const saved = await saveWithRevision(snapshot, headers, currentUserId, clone(baseline))
+                const base = clone(baseline)
+                const saved = base.revision === null
+                    ? await saveLegacy(snapshot, headers, currentUserId)
+                    : await saveWithRevision(snapshot, headers, currentUserId, base)
                 syncStatus.value = saved ? 'done' : 'error'
                 if (saved) lastSyncTime.value = new Date()
                 return saved

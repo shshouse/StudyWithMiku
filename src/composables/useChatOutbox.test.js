@@ -102,3 +102,19 @@ test('a rate limited message waits and is sent again', (t) => {
   assert.equal(sent.length, 2)
   assert.equal(sent[1].clientId, sent[0].clientId)
 })
+
+test('a server without ack support gets a single send and no retry', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  store.clear()
+  const sent = []
+  const outbox = createOutbox(sent, { canRetry: () => false })
+
+  outbox.enqueue('老服务端没有 ack')
+
+  assert.equal(sent.length, 1)
+  assert.deepEqual(outbox.pendingMessages.value, [])
+
+  t.mock.timers.tick(10000)
+
+  assert.equal(sent.length, 1)
+})

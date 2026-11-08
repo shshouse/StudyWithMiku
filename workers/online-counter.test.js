@@ -43,7 +43,7 @@ function createSocket(onSend, overrides = {}) {
   }
 }
 
-function createDb(runBatch = async () => [], existingIds = new Set()) {
+function createDb(runBatch = async () => [], existingIds = new Set(), { lookupError = false } = {}) {
   const batches = []
 
   return {
@@ -52,7 +52,10 @@ function createDb(runBatch = async () => [], existingIds = new Set()) {
       bind: (...args) => ({
         sql,
         args,
-        first: async () => existingIds.has(args[0]) ? { id: args[0] } : null,
+        first: async () => {
+          if (lookupError) throw new Error('D1 lookup failed')
+          return existingIds.has(args[0]) ? { id: args[0] } : null
+        },
       }),
     }),
     batch: async statements => {
@@ -264,4 +267,41 @@ test('a failed revocation lookup rejects the message', async t => {
 
   assert.equal(peer.sent.some(payload => payload.type === 'chat'), false)
   assert.equal(sender.sent.find(payload => payload.type === 'error')?.code, 'unauthorized')
+})
+
+test('a failed dedupe lookup rejects the message instead of writing again', async t => {
+  t.mock.method(console, 'error', () => {})
+  const db = createDb(async () => [], new Set(), { lookupError: true })
+  const { counter, sender, peer } = setup({ db })
+
+  await counter.handleChatMessage(sender, { clientId: 'client-1234-abcd', content: '查不到去重状态' })
+
+  assert.equal(db.batches.length, 0)
+  assert.deepEqual(peer.sent, [])
+  assert.deepEqual(sender.sent, [
+    {
+      type: 'error',
+      code: 'persistence_failed',
+      message: '消息保存失败，请稍后重试',
+      clientId: 'client-1234-abcd',
+    },
+  ])
+})
+
+test('a primary key collision acknowledges without a second broadcast', async t => {
+  t.mock.method(Date, 'now', () => NOW)
+  // 两个请求并发时，查重都还没看到对方写入，插入阶段由主键挡住
+  const db = createDb(async () => [
+    { meta: { changes: 1 } },
+    { meta: { changes: 0 } },
+  ])
+  const { counter, sender, peer } = setup({ db })
+
+  await counter.handleChatMessage(sender, { clientId: 'client-1234-abcd', content: '并发重发' })
+
+  assert.deepEqual(peer.sent, [])
+  assert.deepEqual(sender.sent, [
+    { type: 'chat_ack', clientId: 'client-1234-abcd', id: 'client-1234-abcd' },
+  ])
+  assert.equal(sender.deserializeAttachment().lastMessageAt, NOW)
 })

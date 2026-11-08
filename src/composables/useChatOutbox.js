@@ -37,7 +37,7 @@ const loadEntries = () => {
     }))
 }
 
-export function useChatOutbox({ currentUserId, canSend, send }) {
+export function useChatOutbox({ currentUserId, canSend, canRetry = () => true, send }) {
   const entries = ref(loadEntries())
   const inFlightId = ref('')
 
@@ -107,6 +107,15 @@ export function useChatOutbox({ currentUserId, canSend, send }) {
     })
     if (!sent) {
       inFlightId.value = ''
+      return
+    }
+
+    // 服务端不会回 ack 时就不能重发：没有去重的重发等于复制消息
+    if (!canRetry()) {
+      entries.value = entries.value.filter(item => item.clientId !== entry.clientId)
+      inFlightId.value = ''
+      persist()
+      scheduleFlush(SEND_PACE_MS)
       return
     }
 

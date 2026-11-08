@@ -49,6 +49,7 @@ export const quotesList = [
   { text: '留在港口的船最安全,但是,亲爱的,那不是造船的目的', source: 'Aurora' },//by Aurora
   { text: 'There are the pursued,the pursuing,the busy,and the tired', source: '立身处世,要么被人追求,要么追求别人,要么忙忙碌碌,要么劳累不堪' },//by Yasmin
   { text: '水洼间轻盈跃动,有如水黾般自如', source: '《夜の踊り子》' }, //by 可爱的1208
+  { text: '大家真的都有坏故事的过去,所以我们更要期待好故事的未来!', source: '爱吃葱末' },//by 可爱的葱末！
 
   // { text: '与其临渊羡鱼，不如退而结网', source: '《汉书》' },
   // { text: '学习是唯一一件，投入越多回报越确定的事情', source: '' },

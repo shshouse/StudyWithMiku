@@ -59,6 +59,9 @@ export function useOnlineCount(wsUrl, options = {}) {
   let lastInboundAt = 0
   let reconnectAttempts = 0
   let disposed = false
+  // 服务端在 hello / auth 里声明能力；老 worker 不会声明，此时不能依赖 ack 重发
+  let serverCaps = new Set()
+  const supportsSendRetry = () => serverCaps.has('client_id_v1') && serverCaps.has('chat_ack_v1')
 
   const sendMessage = (payload) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -111,6 +114,7 @@ export function useOnlineCount(wsUrl, options = {}) {
   const outbox = useChatOutbox({
     currentUserId: () => String(unref(options.userId) || ''),
     canSend: () => isAuthenticated.value && !!ws && ws.readyState === WebSocket.OPEN,
+    canRetry: supportsSendRetry,
     send: sendMessage,
   })
 
@@ -122,6 +126,7 @@ export function useOnlineCount(wsUrl, options = {}) {
       const url = unref(wsUrl)
       if (!url) return
 
+      serverCaps = new Set()
       ws = new WebSocket(url)
 
       ws.onopen = () => {
@@ -138,6 +143,9 @@ export function useOnlineCount(wsUrl, options = {}) {
         lastInboundAt = Date.now()
         try {
           const data = JSON.parse(event.data)
+          if (data.type === 'hello' && Array.isArray(data.caps)) {
+            serverCaps = new Set(data.caps)
+          }
           if (data.type === 'count') {
             onlineCount.value = data.count
             adminOnline.value = !!data.adminOnline
@@ -183,7 +191,10 @@ export function useOnlineCount(wsUrl, options = {}) {
           if (data.type === 'auth') {
             isAuthenticated.value = !!data.ok
             chatError.value = ''
-            if (data.ok) outbox.handleReady()
+            if (data.ok) {
+              if (Array.isArray(data.caps)) serverCaps = new Set(data.caps)
+              outbox.handleReady()
+            }
           }
           if (data.type === 'error') {
             const ownedByOutbox = data.clientId && outbox.handleSendError(data.clientId, data.code, data.message)

@@ -11,6 +11,8 @@ const HISTORY_THROTTLE_MS = 400
 const TOKEN_EXPIRY_SECONDS = 30 * 24 * 60 * 60
 const CLOCK_SKEW_TOLERANCE_SECONDS = 60
 const CLIENT_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
+// 客户端据此决定能不能依赖 ack 重发。没有握手的老客户端会忽略这条消息。
+const SERVER_CAPS = ['client_id_v1', 'chat_ack_v1']
 
 const LOCATION_WHITELIST = new Set([
   '北京', '天津', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江',
@@ -381,6 +383,7 @@ export class OnlineCounter {
     })
 
     const initial = await this.getMessagesPage({ before: null, limit: HISTORY_PAGE_SIZE })
+    this.sendJson(server, { type: 'hello', caps: SERVER_CAPS })
     this.sendJson(server, {
       type: 'history',
       messages: initial.messages,
@@ -458,6 +461,7 @@ export class OnlineCounter {
       ok: true,
       userId: auth.userId,
       username: auth.username,
+      caps: SERVER_CAPS,
     })
     this.broadcastPresence()
   }
@@ -533,9 +537,17 @@ export class OnlineCounter {
       return
     }
 
-    if (clientId && await this.messageExists(clientId)) {
-      this.ackMessage(ws, clientId, clientId)
-      return
+    if (clientId) {
+      const dedupe = await this.messageExists(clientId)
+      if (dedupe === 'unknown') {
+        // 无法确认是否已写入时不能放行，否则重发会变成第二条消息
+        this.sendError(ws, 'persistence_failed', '消息保存失败，请稍后重试', clientId)
+        return
+      }
+      if (dedupe === 'exists') {
+        this.ackMessage(ws, clientId, clientId)
+        return
+      }
     }
 
     const now = Date.now()
@@ -568,6 +580,13 @@ export class OnlineCounter {
         username,
         lastMessageAt: now,
       })
+
+      // 主键已存在说明这次是重发，消息本来就在，不必再广播一遍
+      if (saved === 'duplicate') {
+        if (clientId) this.ackMessage(ws, clientId, chatMessage.id)
+        return
+      }
+
       this.broadcast({
         type: 'chat',
         message: clientId ? { ...chatMessage, clientId } : chatMessage,
@@ -579,15 +598,16 @@ export class OnlineCounter {
   }
 
   async messageExists(id) {
-    if (!this.env.CHAT_DB) return false
+    if (!this.env.CHAT_DB) return 'unknown'
     try {
       const row = await this.env.CHAT_DB
         .prepare('SELECT id FROM chat_messages WHERE id = ?')
         .bind(id)
         .first()
-      return Boolean(row)
-    } catch {
-      return false
+      return row ? 'exists' : 'missing'
+    } catch (error) {
+      console.error('D1 dedupe lookup failed:', error)
+      return 'unknown'
     }
   }
 
@@ -694,7 +714,7 @@ export class OnlineCounter {
     if (!this.env.CHAT_DB) return false
 
     try {
-      await this.env.CHAT_DB.batch([
+      const results = await this.env.CHAT_DB.batch([
         this.env.CHAT_DB
           .prepare(`
             INSERT INTO chat_rooms (id, name, created_at, updated_at)
@@ -706,10 +726,14 @@ export class OnlineCounter {
           .prepare(`
             INSERT INTO chat_messages (id, room_id, user_id, username, content, created_at, location)
             VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO NOTHING
           `)
           .bind(message.id, CHAT_ROOM_ID, message.userId, message.username, message.content, createdAt, message.location || ''),
       ])
-      return true
+
+      // changes 为 0 表示这行已经存在，本次是重发而不是新消息
+      const changes = results?.[1]?.meta ? Number(results[1].meta.changes) : null
+      return changes === 0 ? 'duplicate' : 'saved'
     } catch (err) {
       console.error('D1 save error:', err)
       return false
