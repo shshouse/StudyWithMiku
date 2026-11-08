@@ -4,6 +4,8 @@ export const updates = [
   content: [
     '＞﹏＜卖个萌',
     '聊天室：新增多个表情包,根据使用率隐藏了部分表情包',
+    'miku猫猫跳舞表情以17%的占比远远超过第二名9%的miku抱心表情！',
+    '看来大家真的很喜欢miku猫猫跳舞',
   ],
   images:[
     '/update/miku10.jpg',
