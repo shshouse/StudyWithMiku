@@ -16,12 +16,23 @@ export const STICKER_FILES = {
   14: 'jpg',
   15: 'gif',
   16: 'png',
+  17: 'jpg',
+  18: 'jpg',
+  19: 'jpg',
+  20: 'gif',
+  21: 'gif',
 }
 
-export const RETIRED_STICKER_IDS = [10]
-export const STICKER_IDS = Object.keys(STICKER_FILES).map(Number)
-  .filter(id => !RETIRED_STICKER_IDS.includes(id))
+
+export const HIDDEN_STICKER_IDS = [10]
+export const STICKER_ORDER = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21]
+
+const listedIds = STICKER_ORDER.filter(id => STICKER_FILES[id] && !HIDDEN_STICKER_IDS.includes(id))
+const unlistedIds = Object.keys(STICKER_FILES).map(Number)
+  .filter(id => !listedIds.includes(id) && !HIDDEN_STICKER_IDS.includes(id))
   .sort((a, b) => a - b)
+
+export const STICKER_IDS = [...listedIds, ...unlistedIds]
 export const STICKER_PATTERN = /^\[sticker:(\d+)\]$/
 export const getStickerId = (content) => {
   if (typeof content !== 'string') return null
