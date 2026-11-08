@@ -46,12 +46,15 @@
     <div class="floating-chat-body">
       <ChatPanel
         :messages="messages"
+        :pending-messages="pendingMessages"
+        :retry-message="retryMessage"
         :online-count="onlineCount"
         :is-connected="isConnected"
         :is-authenticated="isAuthenticated"
         :is-logged-in="isLoggedIn"
         :chat-error="chatError"
         :current-user-id="currentUserId"
+        :current-username="currentUsername"
         :send-message="sendMessage"
         :profiles="profiles"
         :on-play-shared-song="onPlaySharedSong"
@@ -85,12 +88,15 @@ import ChatPanel from './ChatPanel.vue'
 
 const props = defineProps({
   messages: { type: Array, default: () => [] },
+  pendingMessages: { type: Array, default: () => [] },
+  retryMessage: { type: Function, default: null },
   onlineCount: { type: Number, default: 0 },
   isConnected: { type: Boolean, default: false },
   isAuthenticated: { type: Boolean, default: false },
   isLoggedIn: { type: Boolean, default: false },
   chatError: { type: String, default: '' },
   currentUserId: { type: String, default: '' },
+  currentUsername: { type: String, default: '' },
   sendMessage: { type: Function, required: true },
   profiles: { type: Object, default: () => ({}) },
   hasMore: { type: Boolean, default: false },

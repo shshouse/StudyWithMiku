@@ -8,6 +8,9 @@ const HISTORY_PAGE_SIZE = 50
 const HISTORY_PAGE_LIMIT = 100
 const CHAT_THROTTLE_MS = 1500
 const HISTORY_THROTTLE_MS = 400
+const TOKEN_EXPIRY_SECONDS = 30 * 24 * 60 * 60
+const CLOCK_SKEW_TOLERANCE_SECONDS = 60
+const CLIENT_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
 
 const LOCATION_WHITELIST = new Set([
   '北京', '天津', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江',
@@ -36,6 +39,8 @@ const getDefaultSessionMeta = () => ({
   userId: '',
   username: '',
   authenticated: false,
+  tokenIat: 0,
+  tokenExp: 0,
   lastMessageAt: 0,
   lastHistoryLoadAt: 0,
 })
@@ -53,6 +58,11 @@ const STICKER_MESSAGE_PATTERN = /^\[sticker:(\d+)\]$/
 const isStickerMessage = (value) => {
   const match = STICKER_MESSAGE_PATTERN.exec(String(value || ''))
   return !!match && !!STICKER_FILES[Number(match[1])]
+}
+
+const sanitizeClientId = (value) => {
+  const str = String(value || '').trim()
+  return CLIENT_ID_PATTERN.test(str) ? str : ''
 }
 
 const sanitizeContent = (value) => {
@@ -140,14 +150,58 @@ const verifyStudyToken = async (token, env) => {
     if (payload.iss !== 'mikumod') return null
     if (payload.aud !== 'study') return null
     if (typeof payload.iat !== 'number') return null
+    if (payload.iat > now + CLOCK_SKEW_TOLERANCE_SECONDS) return null
+    if (payload.iat < now - TOKEN_EXPIRY_SECONDS) return null
     if (minIat > 0 && payload.iat < minIat) return null
-    if (payload.exp && payload.exp < now) return null
+    if (typeof payload.exp !== 'number') return null
+    if (payload.exp < now) return null
+    if (payload.exp > payload.iat + TOKEN_EXPIRY_SECONDS + CLOCK_SKEW_TOLERANCE_SECONDS) return null
 
     return {
       userId: payload.sub,
       username: sanitizeUsername(payload.username || payload.sub.slice(0, 8)),
+      iat: payload.iat,
+      exp: payload.exp,
     }
   } catch {
+    return null
+  }
+}
+
+const getTokenValidFrom = async (userId, env) => {
+  const baseUrl = String(env.SUPABASE_URL || '').replace(/\/+$/, '')
+  const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY
+  if (!baseUrl || !serviceKey) {
+    throw new Error('Supabase revocation lookup is not configured')
+  }
+
+  const response = await fetch(
+    `${baseUrl}/rest/v1/auth_state?select=valid_from_iat&user_id=eq.${encodeURIComponent(userId)}`,
+    {
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        Accept: 'application/json',
+        'Accept-Profile': 'study',
+      },
+    }
+  )
+  if (!response.ok) throw new Error(`Supabase revocation lookup failed: ${response.status}`)
+
+  const rows = await response.json()
+  const validFrom = Array.isArray(rows) ? Number(rows[0]?.valid_from_iat ?? 0) : 0
+  return Number.isFinite(validFrom) ? validFrom : 0
+}
+
+const verifyActiveStudyToken = async (token, env) => {
+  const auth = await verifyStudyToken(token, env)
+  if (!auth) return null
+
+  try {
+    const validFrom = await getTokenValidFrom(auth.userId, env)
+    return auth.iat >= validFrom ? auth : null
+  } catch (error) {
+    console.error('Study token revocation check failed:', error)
     return null
   }
 }
@@ -280,6 +334,8 @@ export class OnlineCounter {
       userId: String(meta.userId ?? current.userId ?? '').slice(0, 128),
       username: sanitizeUsername(meta.username ?? current.username),
       authenticated: Boolean(meta.authenticated ?? current.authenticated),
+      tokenIat: Number(meta.tokenIat ?? current.tokenIat) || 0,
+      tokenExp: Number(meta.tokenExp ?? current.tokenExp) || 0,
       lastMessageAt: Number(meta.lastMessageAt ?? current.lastMessageAt) || 0,
       lastHistoryLoadAt: Number(meta.lastHistoryLoadAt ?? current.lastHistoryLoadAt) || 0,
     })
@@ -311,7 +367,7 @@ export class OnlineCounter {
       return new Response('Expected WebSocket', { status: 426 })
     }
 
-    const auth = await verifyStudyToken(getBearerToken(request), this.env)
+    const auth = await verifyActiveStudyToken(getBearerToken(request), this.env)
     const pair = new WebSocketPair()
     const [client, server] = Object.values(pair)
 
@@ -320,6 +376,8 @@ export class OnlineCounter {
       userId: auth?.userId || '',
       username: auth?.username || sanitizeUsername(url.searchParams.get('username')),
       authenticated: Boolean(auth),
+      tokenIat: auth?.iat || 0,
+      tokenExp: auth?.exp || 0,
     })
 
     const initial = await this.getMessagesPage({ before: null, limit: HISTORY_PAGE_SIZE })
@@ -382,7 +440,7 @@ export class OnlineCounter {
   }
 
   async handleAuth(ws, token) {
-    const auth = await verifyStudyToken(token, this.env)
+    const auth = await verifyActiveStudyToken(token, this.env)
     if (!auth) {
       this.sendError(ws, 'unauthorized', '登录已失效')
       return
@@ -392,6 +450,8 @@ export class OnlineCounter {
       userId: auth.userId,
       username: auth.username,
       authenticated: true,
+      tokenIat: auth.iat,
+      tokenExp: auth.exp,
     })
     this.sendJson(ws, {
       type: 'auth',
@@ -424,35 +484,70 @@ export class OnlineCounter {
     })
   }
 
+  async isSessionAuthorized(meta) {
+    if (!meta.authenticated || !meta.userId) return false
+    const now = Math.floor(Date.now() / 1000)
+    if (!meta.tokenIat || !meta.tokenExp) return false
+    if (meta.tokenIat > now + CLOCK_SKEW_TOLERANCE_SECONDS) return false
+    if (meta.tokenIat < now - TOKEN_EXPIRY_SECONDS) return false
+    if (meta.tokenExp < now) return false
+
+    try {
+      const validFrom = await getTokenValidFrom(meta.userId, this.env)
+      return meta.tokenIat >= validFrom
+    } catch (error) {
+      console.error('Study session revocation check failed:', error)
+      return false
+    }
+  }
+
   async handleChatMessage(ws, data) {
     const meta = this.getSessionMeta(ws)
     const content = sanitizeContent(data.content ?? data.message)
+    const clientId = sanitizeClientId(data.clientId)
 
     if (!content) {
-      this.sendError(ws, 'empty_message', '消息不能为空')
+      this.sendError(ws, 'empty_message', '消息不能为空', clientId)
       return
     }
 
     if (!this.env.STUDY_JWT_SECRET) {
-      this.sendError(ws, 'server_misconfigured', '聊天服务未配置鉴权密钥')
+      this.sendError(ws, 'server_misconfigured', '聊天服务未配置鉴权密钥', clientId)
       return
     }
 
     if (!meta.authenticated) {
-      this.sendError(ws, 'unauthorized', '请先登录后发言')
+      this.sendError(ws, 'unauthorized', '请先登录后发言', clientId)
+      return
+    }
+
+    if (!(await this.isSessionAuthorized(meta))) {
+      this.setSessionMeta(ws, {
+        authenticated: false,
+        userId: '',
+        tokenIat: 0,
+        tokenExp: 0,
+      })
+      this.broadcastPresence()
+      this.sendError(ws, 'unauthorized', '登录已失效，请重新登录', clientId)
+      return
+    }
+
+    if (clientId && await this.messageExists(clientId)) {
+      this.ackMessage(ws, clientId, clientId)
       return
     }
 
     const now = Date.now()
     if (this.pendingChatMessages.has(ws) || (meta.lastMessageAt && now - meta.lastMessageAt < CHAT_THROTTLE_MS)) {
-      this.sendError(ws, 'rate_limited', '发送太频繁了')
+      this.sendError(ws, 'rate_limited', '发送太频繁了', clientId)
       return
     }
 
     const username = meta.username || sanitizeUsername(data.username) || '游客'
     const location = sanitizeLocation(data.location)
     const chatMessage = {
-      id: crypto.randomUUID(),
+      id: clientId || crypto.randomUUID(),
       roomId: CHAT_ROOM_ID,
       userId: meta.authenticated ? meta.userId : '',
       username,
@@ -465,7 +560,7 @@ export class OnlineCounter {
     try {
       const saved = await this.saveMessage(chatMessage, now)
       if (!saved) {
-        this.sendError(ws, 'persistence_failed', '消息保存失败，请稍后重试')
+        this.sendError(ws, 'persistence_failed', '消息保存失败，请稍后重试', clientId)
         return
       }
 
@@ -475,11 +570,29 @@ export class OnlineCounter {
       })
       this.broadcast({
         type: 'chat',
-        message: chatMessage,
+        message: clientId ? { ...chatMessage, clientId } : chatMessage,
       })
+      if (clientId) this.ackMessage(ws, clientId, chatMessage.id)
     } finally {
       this.pendingChatMessages.delete(ws)
     }
+  }
+
+  async messageExists(id) {
+    if (!this.env.CHAT_DB) return false
+    try {
+      const row = await this.env.CHAT_DB
+        .prepare('SELECT id FROM chat_messages WHERE id = ?')
+        .bind(id)
+        .first()
+      return Boolean(row)
+    } catch {
+      return false
+    }
+  }
+
+  ackMessage(ws, clientId, id) {
+    this.sendJson(ws, { type: 'chat_ack', clientId, id })
   }
 
   getPresence() {
@@ -520,11 +633,12 @@ export class OnlineCounter {
     }
   }
 
-  sendError(ws, code, message) {
+  sendError(ws, code, message, clientId = '') {
     this.sendJson(ws, {
       type: 'error',
       code,
       message,
+      ...(clientId ? { clientId } : {}),
     })
   }
 

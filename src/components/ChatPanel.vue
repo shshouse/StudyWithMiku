@@ -34,12 +34,12 @@
           </span>
         </div>
         <div v-else-if="messages.length > 0" class="chat-history-status chat-history-end">已经到顶啦</div>
-        <div v-if="messages.length === 0" class="chat-empty">暂无消息，开始第一句聊天吧</div>
+        <div v-if="messages.length === 0 && pendingMessages.length === 0" class="chat-empty">暂无消息，开始第一句聊天吧</div>
         <div
           v-for="group in groupedMessages"
           :key="group.key"
           class="chat-message-group"
-          :class="{ own: group.messages[0].userId && group.messages[0].userId === currentUserId }"
+          :class="{ own: group.messages[0].userId && group.messages[0].userId === currentUserId, 'chat-pending': group.pending && group.pending !== 'failed', 'chat-pending-failed': group.pending === 'failed' }"
         >
           <div
             class="chat-avatar"
@@ -64,6 +64,7 @@
               <span v-if="getGroupLocation(group.messages)" class="chat-message-location">{{ getGroupLocation(group.messages) }}</span>
               <span class="chat-message-time-date">{{ formatChatTime(group.messages[0].createdAt).datePart }}</span>
               <span class="chat-message-time-hm">{{ formatChatTime(group.messages[0].createdAt).timePart }}</span>
+              <span v-if="group.pending" class="chat-pending-status">{{ group.pending === 'failed' ? '发送失败' : '发送中' }}</span>
             </div>
             <div
               v-for="message in group.messages"
@@ -73,6 +74,20 @@
             >
               <div class="chat-message-actions">
                 <button
+                  v-if="message.pendingStatus === 'failed'"
+                  type="button"
+                  class="chat-reply-btn chat-retry-btn"
+                  title="重新发送"
+                  aria-label="重新发送"
+                  @click="retryPending(message.clientId)"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                    <polyline points="21 3 21 9 15 9"></polyline>
+                  </svg>
+                </button>
+                <button
+                  v-else-if="!message.pendingStatus"
                   type="button"
                   class="chat-reply-btn"
                   title="回复"
@@ -249,12 +264,15 @@ const { location: geoLocation, detect: detectGeo } = useGeoLocation()
 
 const props = defineProps({
   messages: { type: Array, default: () => [] },
+  pendingMessages: { type: Array, default: () => [] },
+  retryMessage: { type: Function, default: null },
   onlineCount: { type: Number, default: 0 },
   isConnected: { type: Boolean, default: false },
   isAuthenticated: { type: Boolean, default: false },
   isLoggedIn: { type: Boolean, default: false },
   chatError: { type: String, default: '' },
   currentUserId: { type: String, default: '' },
+  currentUsername: { type: String, default: '' },
   sendMessage: { type: Function, required: true },
   showPopout: { type: Boolean, default: true },
   popoutActive: { type: Boolean, default: false },
@@ -321,6 +339,10 @@ const cancelReply = () => {
   replyingTo.value = null
 }
 
+const retryPending = (clientId) => {
+  props.retryMessage?.(clientId)
+}
+
 const renderStickerId = (content) => getStickerId(content)
 
 const renderMusicShare = (content) => parseMusicShareMessage(content)
@@ -372,6 +394,24 @@ const groupedMessages = computed(() => {
       current = { key: enriched.id, messages: [enriched] }
       groups.push(current)
     }
+  }
+  for (const item of props.pendingMessages) {
+    const parsed = parseReplyMessage(item.content)
+    groups.push({
+      key: item.clientId,
+      pending: item.status,
+      messages: [{
+        id: item.clientId,
+        clientId: item.clientId,
+        userId: props.currentUserId,
+        username: props.currentUsername,
+        content: parsed ? parsed.text : item.content,
+        replyToId: parsed ? parsed.replyToId : '',
+        createdAt: new Date(item.createdAt).toISOString(),
+        location: item.location,
+        pendingStatus: item.status,
+      }],
+    })
   }
   return groups
 })
@@ -1022,6 +1062,22 @@ defineExpose({ scrollChatToBottom, jumpToBottom })
   z-index: 2;
 }
 .chat-message-item:hover .chat-message-actions { opacity: 1; }
+.chat-message-group.chat-pending .chat-message-bubble { opacity: 0.75; }
+.chat-message-group.chat-pending-failed .chat-message-bubble { opacity: 1; }
+.chat-pending-status {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.45);
+}
+.chat-pending-failed .chat-pending-status { color: #ff9c9c; }
+.chat-pending-failed .chat-message-actions { opacity: 1; }
+.chat-retry-btn {
+  color: #ff9c9c;
+  border-color: rgba(255, 156, 156, 0.4);
+}
+.chat-retry-btn:hover {
+  color: #ffd0d0;
+  background: rgba(58, 22, 26, 0.92);
+}
 .chat-reply-btn {
   display: inline-flex;
   align-items: center;

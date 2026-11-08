@@ -56,6 +56,7 @@ export function getTokenUserId(studyToken) {
  }
 
 const MIKUMOD_URL = import.meta.env.VITE_MIKUMOD_URL || 'https://mikumod.com'
+const MIKUMOD_API = import.meta.env.VITE_MIKUMOD_API_URL || MIKUMOD_URL
 const STUDY_URL = import.meta.env.VITE_STUDY_URL || 'https://study.mikumod.com'
 
 export function useStudyAuth() {
@@ -110,7 +111,23 @@ export function useStudyAuth() {
     }
 
 
-    const logout = () => {
+    const logout = async () => {
+        if (token.value) {
+            try {
+                const response = await fetch(`${MIKUMOD_API}/api/study/logout`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    cache: 'no-store',
+                })
+                if (!response.ok && response.status !== 401) {
+                    throw new Error(`退出登录失败: ${response.status}`)
+                }
+            } catch (error) {
+                console.error('Study logout error:', error)
+                return false
+            }
+        }
+
         token.value = ''
         username.value = ''
         userId.value = ''
@@ -120,6 +137,7 @@ export function useStudyAuth() {
         localStorage.removeItem(STUDY_USER_KEY)
         localStorage.removeItem(STUDY_USER_ID_KEY)
         sessionStorage.removeItem(STUDY_TOKEN_USER_CHANGED_KEY)
+        return true
     }
 
     const clearTokenUserChanged = () => {

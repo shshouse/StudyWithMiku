@@ -338,7 +338,10 @@
                   :is-authenticated="isAuthenticated"
                   :is-logged-in="isLoggedIn"
                   :chat-error="chatError"
+                  :pending-messages="pendingMessages"
+                  :retry-message="retryMessage"
                   :current-user-id="getCurrentStudyUserId()"
+                  :current-username="username"
                   :send-message="sendChatMessage"
                   :profiles="userProfiles"
                   :on-play-shared-song="playSharedSong"
@@ -447,7 +450,10 @@
     :is-authenticated="isAuthenticated"
     :is-logged-in="isLoggedIn"
     :chat-error="chatError"
+    :pending-messages="pendingMessages"
+    :retry-message="retryMessage"
     :current-user-id="getCurrentStudyUserId()"
+    :current-username="username"
     :send-message="sendChatMessage"
     :profiles="userProfiles"
     :on-play-shared-song="playSharedSong"
@@ -524,10 +530,12 @@ const props = defineProps({
 })
 
 const { token, username, userId, tokenUserChanged, sessionExpired, isLoggedIn, login, logout, clearTokenUserChanged, clearSessionExpired, isTokenExpired } = useStudyAuth()
-const { onlineCount, adminOnline, isConnected, isAuthenticated, messages, chatError, hasMoreHistory, isLoadingHistory, sendChatMessage, loadMoreMessages } = useOnlineCount(import.meta.env.VITE_WS_URL, { username, token })
+const { onlineCount, adminOnline, isConnected, isAuthenticated, messages, chatError, hasMoreHistory, isLoadingHistory, pendingMessages, sendChatMessage, retryMessage, loadMoreMessages } = useOnlineCount(import.meta.env.VITE_WS_URL, { username, token, userId })
 const { profiles: userProfiles, ensureProfiles } = useUserProfiles()
 const { playlistId, platform, bitrate, applyCustomPlaylist, resetToLocal, songs, customPlaylists, addCustomPlaylist, removeCustomPlaylist, DEFAULT_PLAYLIST_ID, PLATFORMS, BITRATE_OPTIONS, setBitrate } = useMusic()
-const { syncStatus, lastSyncTime, fetchRemoteData, syncOnLogin, pushCalendar, fetchCalendar, pushAll } = useStudySync()
+const { syncStatus, lastSyncTime, fetchRemoteData, syncOnLogin, pushCalendar, fetchCalendar, pushAll } = useStudySync({
+  onDataMerged: (data) => applyRemoteData(data),
+})
 const { countdowns, addCountdown, deleteCountdown, setCountdowns } = useCountdown()
 const { crossfadeEnabled, toggleCrossfade, fadeMusicOut, fadeMusicIn, duckMusicForNotification } = useCrossfade()
 const { recordStudyTime: calendarRecordStudy, recordPomodoro: calendarRecordPomodoro, getCalendarData, setCalendarData } = useCalendar()
@@ -1388,31 +1396,31 @@ const onUITouchEnd = () => { setHoveringUI(false) }
 
 onMounted(async () => {
   if (isLoggedIn.value && !isTokenExpired()) {
-    if (isLocalStudyOwnerMismatch()) {
-      backupLocalStudyData()
-      if (pushTimeout) {
-        clearTimeout(pushTimeout)
-        pushTimeout = null
-      }
-      const remoteData = await fetchRemoteData()
-      if (remoteData) {
-        applyRemoteData(remoteData)
-        if (!remoteData.settings) resetPomodoroSettings()
+    try {
+      if (isLocalStudyOwnerMismatch()) {
+        backupLocalStudyData()
+        if (pushTimeout) {
+          clearTimeout(pushTimeout)
+          pushTimeout = null
+        }
+        const [remoteData, remoteCalendar] = await Promise.all([fetchRemoteData(), fetchCalendar()])
+        if (remoteData) {
+          applyRemoteData(remoteData)
+          if (!remoteData.settings) resetPomodoroSettings()
+        } else {
+          resetLocalStudyData()
+          resetPomodoroSettings()
+        }
+        setCalendarData(remoteCalendar)
+        markLocalStudyOwner()
+        clearTokenUserChanged()
       } else {
-        resetLocalStudyData()
-        resetPomodoroSettings()
-      }
-      const remoteCalendar = await fetchCalendar()
-      setCalendarData(remoteCalendar || { dailyLog: {}, plans: {} })
-      markLocalStudyOwner()
-      clearTokenUserChanged()
-    } else {
-      if (!getLocalStudyOwnerId()) markLocalStudyOwner()
-      const { autoMerged, applyRemote } = await syncOnLogin(studyStats, todos.value, withCountdownsSettings())
-      if (applyRemote) applyRemoteData(applyRemote)
-      if (autoMerged) triggerSyncToast()
-      const remoteCalendar = await fetchCalendar()
-      if (remoteCalendar) {
+        if (!getLocalStudyOwnerId()) markLocalStudyOwner()
+        const { autoMerged, applyRemote } = await syncOnLogin(studyStats, todos.value, withCountdownsSettings())
+        if (applyRemote) applyRemoteData(applyRemote)
+        if (autoMerged) triggerSyncToast()
+
+        const remoteCalendar = await fetchCalendar()
         const local = getCalendarData()
         const allDates = new Set([...Object.keys(remoteCalendar.dailyLog || {}), ...Object.keys(local.dailyLog || {})])
         const mergedLog = {}
@@ -1427,22 +1435,21 @@ onMounted(async () => {
         const allPlanDates = new Set([...Object.keys(remoteCalendar.plans || {}), ...Object.keys(local.plans || {})])
         const mergedPlans = {}
         for (const date of allPlanDates) {
-          const rPlans = remoteCalendar.plans?.[date] || []
-          const lPlans = local.plans?.[date] || []
           const seen = new Set()
           mergedPlans[date] = []
-          for (const p of [...lPlans, ...rPlans]) {
-            if (!seen.has(p.id)) { seen.add(p.id); mergedPlans[date].push(p) }
+          for (const plan of [...(local.plans?.[date] || []), ...(remoteCalendar.plans?.[date] || [])]) {
+            const key = plan?.id ?? JSON.stringify(plan)
+            if (!seen.has(key)) {
+              seen.add(key)
+              mergedPlans[date].push(plan)
+            }
           }
         }
         setCalendarData({ dailyLog: mergedLog, plans: mergedPlans })
-        pushCalendar(mergedLog, mergedPlans)
-      } else {
-        const local = getCalendarData()
-        if (Object.keys(local.dailyLog).length > 0 || Object.keys(local.plans).length > 0) {
-          pushCalendar(local.dailyLog, local.plans)
-        }
+        await pushCalendar(mergedLog, mergedPlans)
       }
+    } catch (error) {
+      console.error('Study sync skipped:', error)
     }
   }
 

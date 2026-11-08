@@ -15,13 +15,17 @@ const RATE_LIMIT_ERROR = {
   message: '发送太频繁了',
 }
 
-function createSocket(onSend) {
+function createSocket(onSend, overrides = {}) {
+  const nowSeconds = Math.floor(Date.now() / 1000)
   let attachment = {
     userId: 'user-1',
     username: '测试用户',
     authenticated: true,
+    tokenIat: nowSeconds,
+    tokenExp: nowSeconds + 3600,
     lastMessageAt: 0,
     lastHistoryLoadAt: 0,
+    ...overrides,
   }
   const sent = []
 
@@ -39,13 +43,17 @@ function createSocket(onSend) {
   }
 }
 
-function createDb(runBatch = async () => []) {
+function createDb(runBatch = async () => [], existingIds = new Set()) {
   const batches = []
 
   return {
     batches,
     prepare: sql => ({
-      bind: (...args) => ({ sql, args }),
+      bind: (...args) => ({
+        sql,
+        args,
+        first: async () => existingIds.has(args[0]) ? { id: args[0] } : null,
+      }),
     }),
     batch: async statements => {
       batches.push(statements)
@@ -54,12 +62,24 @@ function createDb(runBatch = async () => []) {
   }
 }
 
-function setup({ db, onSend } = {}) {
-  const sender = createSocket(payload => onSend?.('sender', payload))
+function setup({ db, onSend, senderMeta, validFrom = 0, authStateError = false } = {}) {
+  const sender = createSocket(payload => onSend?.('sender', payload), senderMeta)
   const peer = createSocket(payload => onSend?.('peer', payload))
+  globalThis.fetch = async () => {
+    if (authStateError) throw new Error('Supabase unavailable')
+    return new Response(JSON.stringify(validFrom ? [{ valid_from_iat: validFrom }] : []), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
   const counter = new OnlineCounter(
     { getWebSockets: () => [sender, peer] },
-    { STUDY_JWT_SECRET: 'test-secret', CHAT_DB: db },
+    {
+      STUDY_JWT_SECRET: 'test-secret',
+      CHAT_DB: db,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-key',
+    },
   )
 
   return { counter, sender, peer }
@@ -93,7 +113,7 @@ test('D1 batch rejection reports a persistence error without broadcasting', asyn
 })
 
 test('a chat broadcast follows successful D1 persistence', async t => {
-  t.mock.method(Date, 'now', () => NOW)
+    t.mock.method(Date, 'now', () => NOW)
   const events = []
   const db = createDb(async () => {
     events.push('batch')
@@ -156,4 +176,92 @@ test('a failed D1 save can be retried immediately', async t => {
   assert.deepEqual(sender.sent.map(payload => payload.type), ['error', 'chat'])
   assert.equal(peer.sent.length, 1)
   assert.equal(peer.sent[0].message.content, '立即重试')
+})
+
+test('a client id becomes the message id and is confirmed with an ack', async t => {
+  t.mock.method(Date, 'now', () => NOW)
+  const events = []
+  const db = createDb(async () => {
+    events.push('batch')
+    return []
+  })
+  const { counter, sender, peer } = setup({
+    db,
+    onSend: (recipient, payload) => events.push(`${recipient}:${payload.type}`),
+  })
+
+  await counter.handleChatMessage(sender, { clientId: 'client-1234-abcd', content: '带确认的消息' })
+
+  assert.deepEqual(events, ['batch', 'sender:chat', 'peer:chat', 'sender:chat_ack'])
+  assert.equal(db.batches[0][1].args[0], 'client-1234-abcd')
+  assert.equal(peer.sent[0].message.clientId, 'client-1234-abcd')
+  assert.deepEqual(sender.sent[sender.sent.length - 1], {
+    type: 'chat_ack',
+    clientId: 'client-1234-abcd',
+    id: 'client-1234-abcd',
+  })
+})
+
+test('a resent client id is acknowledged without a second write', async () => {
+  const db = createDb(async () => [], new Set(['client-1234-abcd']))
+  const { counter, sender, peer } = setup({ db })
+
+  await counter.handleChatMessage(sender, { clientId: 'client-1234-abcd', content: '重复提交' })
+
+  assert.equal(db.batches.length, 0)
+  assert.deepEqual(peer.sent, [])
+  assert.deepEqual(sender.sent, [
+    { type: 'chat_ack', clientId: 'client-1234-abcd', id: 'client-1234-abcd' },
+  ])
+})
+
+test('a rejected message names the client id so the sender can retry it', async () => {
+  const { counter, sender, peer } = setup()
+
+  await counter.handleChatMessage(sender, { clientId: 'client-1234-abcd', content: '不能丢失的消息' })
+
+  assert.deepEqual(peer.sent, [])
+  assert.deepEqual(sender.sent, [
+    {
+      type: 'error',
+      code: 'persistence_failed',
+      message: '消息保存失败，请稍后重试',
+      clientId: 'client-1234-abcd',
+    },
+  ])
+})
+
+test('an expired session cannot send messages', async () => {
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  const { counter, sender, peer } = setup({
+    senderMeta: { tokenIat: nowSeconds - 100, tokenExp: nowSeconds - 1 },
+  })
+
+  await counter.handleChatMessage(sender, { content: '过期会话' })
+
+  assert.equal(peer.sent.some(payload => payload.type === 'chat'), false)
+  assert.equal(sender.sent.find(payload => payload.type === 'error')?.code, 'unauthorized')
+})
+
+test('a session revoked on another device cannot send messages', async () => {
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  const { counter, sender, peer } = setup({
+    senderMeta: { tokenIat: nowSeconds - 100, tokenExp: nowSeconds + 3600 },
+    validFrom: nowSeconds - 99,
+  })
+
+  await counter.handleChatMessage(sender, { content: '已撤销会话' })
+
+  assert.equal(peer.sent.some(payload => payload.type === 'chat'), false)
+  assert.equal(sender.sent.find(payload => payload.type === 'error')?.code, 'unauthorized')
+})
+
+test('a failed revocation lookup rejects the message', async t => {
+  t.mock.method(console, 'error', () => {})
+  const { counter, sender, peer } = setup({ authStateError: true })
+
+  await counter.handleChatMessage(sender, { content: '无法确认撤销状态' })
+
+  assert.equal(peer.sent.some(payload => payload.type === 'chat'), false)
+  assert.equal(sender.sent.find(payload => payload.type === 'error')?.code, 'unauthorized')
 })
