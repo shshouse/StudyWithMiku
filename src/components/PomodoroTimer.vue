@@ -339,7 +339,8 @@
                   :is-logged-in="isLoggedIn"
                   :chat-error="chatError"
                   :pending-messages="pendingMessages"
-                  :retry-message="retryMessage"
+                  :failed-drafts="failedDrafts"
+                  :dismiss-failed="dismissFailed"
                   :current-user-id="getCurrentStudyUserId()"
                   :current-username="username"
                   :send-message="sendChatMessage"
@@ -451,7 +452,8 @@
     :is-logged-in="isLoggedIn"
     :chat-error="chatError"
     :pending-messages="pendingMessages"
-    :retry-message="retryMessage"
+    :failed-drafts="failedDrafts"
+    :dismiss-failed="dismissFailed"
     :current-user-id="getCurrentStudyUserId()"
     :current-username="username"
     :send-message="sendChatMessage"
@@ -530,7 +532,7 @@ const props = defineProps({
 })
 
 const { token, username, userId, tokenUserChanged, sessionExpired, isLoggedIn, login, logout, clearTokenUserChanged, clearSessionExpired, isTokenExpired } = useStudyAuth()
-const { onlineCount, adminOnline, isConnected, isAuthenticated, messages, chatError, hasMoreHistory, isLoadingHistory, pendingMessages, sendChatMessage, retryMessage, loadMoreMessages } = useOnlineCount(import.meta.env.VITE_WS_URL, { username, token, userId })
+const { onlineCount, adminOnline, isConnected, isAuthenticated, messages, chatError, hasMoreHistory, isLoadingHistory, pendingMessages, failedDrafts, dismissFailed, sendChatMessage, loadMoreMessages } = useOnlineCount(import.meta.env.VITE_WS_URL, { username, token, userId })
 const { profiles: userProfiles, ensureProfiles } = useUserProfiles()
 const { playlistId, platform, bitrate, applyCustomPlaylist, resetToLocal, songs, customPlaylists, addCustomPlaylist, removeCustomPlaylist, DEFAULT_PLAYLIST_ID, PLATFORMS, BITRATE_OPTIONS, setBitrate } = useMusic()
 const { syncStatus, lastSyncTime, fetchRemoteData, syncOnLogin, pushCalendar, fetchCalendar, pushAll } = useStudySync({

@@ -65,7 +65,7 @@ function createDb(runBatch = async () => [], existingIds = new Set(), { lookupEr
   }
 }
 
-function setup({ db, onSend, senderMeta, validFrom = 0, authStateError = false } = {}) {
+function setup({ db, onSend, senderMeta, validFrom = 0, authStateError = false, env = {} } = {}) {
   const sender = createSocket(payload => onSend?.('sender', payload), senderMeta)
   const peer = createSocket(payload => onSend?.('peer', payload))
   globalThis.fetch = async () => {
@@ -82,6 +82,7 @@ function setup({ db, onSend, senderMeta, validFrom = 0, authStateError = false }
       CHAT_DB: db,
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-key',
+      ...env,
     },
   )
 
@@ -304,4 +305,28 @@ test('a primary key collision acknowledges without a second broadcast', async t 
     { type: 'chat_ack', clientId: 'client-1234-abcd', id: 'client-1234-abcd' },
   ])
   assert.equal(sender.deserializeAttachment().lastMessageAt, NOW)
+})
+
+test('未配置 Supabase 时不阻断发言', async t => {
+  t.mock.method(Date, 'now', () => NOW)
+  const db = createDb(async () => [])
+  const { counter, sender, peer } = setup({
+    db,
+    env: { SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '' },
+  })
+
+  await counter.handleChatMessage(sender, { content: '吊销功能未启用时仍可发言' })
+
+  assert.equal(peer.sent.filter(payload => payload.type === 'chat').length, 1)
+})
+
+test('服务端不再按贴纸清单拦截，新增贴纸无需重新部署', async t => {
+  t.mock.method(Date, 'now', () => NOW)
+  const db = createDb(async () => [])
+  const { counter, sender, peer } = setup({ db })
+
+  await counter.handleChatMessage(sender, { content: '[sticker:21]' })
+
+  assert.equal(peer.sent.filter(payload => payload.type === 'chat').length, 1)
+  assert.equal(peer.sent[0].message.content, '[sticker:21]')
 })

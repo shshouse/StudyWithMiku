@@ -312,8 +312,9 @@ export function useOnlineCount(wsUrl, options = {}) {
     hasMoreHistory,
     isLoadingHistory,
     pendingMessages: outbox.pendingMessages,
+    failedDrafts: outbox.failedDrafts,
+    dismissFailed: outbox.dismissFailed,
     sendChatMessage,
-    retryMessage: outbox.retry,
     loadMoreMessages,
   }
 }

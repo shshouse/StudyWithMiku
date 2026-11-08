@@ -24,7 +24,7 @@ const loadEntries = () => {
   }
   if (!Array.isArray(stored)) return []
   return stored
-    .filter(item => item && typeof item.clientId === 'string' && typeof item.content === 'string')
+    .filter(item => item && typeof item.clientId === 'string' && typeof item.content === 'string' && !item.failed)
     .map(item => ({
       clientId: item.clientId,
       userId: String(item.userId || ''),
@@ -32,13 +32,12 @@ const loadEntries = () => {
       location: String(item.location || ''),
       createdAt: Number(item.createdAt) || Date.now(),
       attempts: Number(item.attempts) || 0,
-      failed: Boolean(item.failed),
-      error: String(item.error || ''),
     }))
 }
 
 export function useChatOutbox({ currentUserId, canSend, canRetry = () => true, send }) {
   const entries = ref(loadEntries())
+  const failedDrafts = ref([])
   const inFlightId = ref('')
 
   let ackTimer = null
@@ -69,9 +68,18 @@ export function useChatOutbox({ currentUserId, canSend, canRetry = () => true, s
   }
 
   const failEntry = (entry, message) => {
-    entry.failed = true
-    entry.error = message
+    entries.value = entries.value.filter(item => item.clientId !== entry.clientId)
     persist()
+    failedDrafts.value = [...failedDrafts.value, {
+      clientId: entry.clientId,
+      content: entry.content,
+      location: entry.location,
+      error: message,
+    }]
+  }
+
+  const dismissFailed = (clientId) => {
+    failedDrafts.value = failedDrafts.value.filter(item => item.clientId !== clientId)
   }
 
   const pendingMessages = computed(() => {
@@ -83,8 +91,7 @@ export function useChatOutbox({ currentUserId, canSend, canRetry = () => true, s
         content: item.content,
         location: item.location,
         createdAt: item.createdAt,
-        status: item.failed ? 'failed' : item.clientId === inFlightId.value ? 'sending' : 'pending',
-        error: item.error,
+        status: item.clientId === inFlightId.value ? 'sending' : 'pending',
       }))
   })
 
@@ -92,7 +99,7 @@ export function useChatOutbox({ currentUserId, canSend, canRetry = () => true, s
     if (inFlightId.value || !canSend()) return
     const userId = currentUserId()
     if (!userId) return
-    const entry = entries.value.find(item => item.userId === userId && !item.failed)
+    const entry = entries.value.find(item => item.userId === userId)
     if (!entry) return
 
     inFlightId.value = entry.clientId
@@ -156,8 +163,7 @@ export function useChatOutbox({ currentUserId, canSend, canRetry = () => true, s
     }
 
     if (code === 'unauthorized') {
-      entry.error = message
-      persist()
+      failEntry(entry, message || '请重新登录后发送')
       return true
     }
 
@@ -183,20 +189,7 @@ export function useChatOutbox({ currentUserId, canSend, canRetry = () => true, s
       location: String(location || ''),
       createdAt: Date.now(),
       attempts: 0,
-      failed: false,
-      error: '',
     }]
-    persist()
-    flush()
-    return true
-  }
-
-  const retry = (clientId) => {
-    const entry = findEntry(clientId)
-    if (!entry) return false
-    entry.failed = false
-    entry.error = ''
-    entry.attempts = 0
     persist()
     flush()
     return true
@@ -204,15 +197,8 @@ export function useChatOutbox({ currentUserId, canSend, canRetry = () => true, s
 
   const handleReady = () => {
     const now = Date.now()
-    let changed = false
-    for (const entry of entries.value) {
-      if (!entry.failed && now - entry.createdAt > AUTO_RESEND_WINDOW_MS) {
-        entry.failed = true
-        entry.error = '超过 24 小时未发送'
-        changed = true
-      }
-    }
-    if (changed) persist()
+    const stale = entries.value.filter(item => now - item.createdAt > AUTO_RESEND_WINDOW_MS)
+    for (const entry of stale) failEntry(entry, '超过 24 小时未发送')
     flush()
   }
 
@@ -223,11 +209,12 @@ export function useChatOutbox({ currentUserId, canSend, canRetry = () => true, s
 
   return {
     pendingMessages,
+    failedDrafts,
     enqueue,
     confirm,
+    dismissFailed,
     handleSendError,
     handleReady,
     handleDisconnect,
-    retry,
   }
 }

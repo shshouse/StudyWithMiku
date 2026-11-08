@@ -1,5 +1,3 @@
-import { STICKER_FILES } from '../src/data/stickers.js'
-
 const CHAT_ROOM_ID = 'global'
 const MAX_USERNAME_LENGTH = 40
 const MAX_MESSAGE_LENGTH = 500
@@ -56,11 +54,9 @@ const getAdminUserIds = (env) => new Set(
 
 const sanitizeUsername = (value) => String(value || '').trim().slice(0, MAX_USERNAME_LENGTH)
 
-const STICKER_MESSAGE_PATTERN = /^\[sticker:(\d+)\]$/
-const isStickerMessage = (value) => {
-  const match = STICKER_MESSAGE_PATTERN.exec(String(value || ''))
-  return !!match && !!STICKER_FILES[Number(match[1])]
-}
+// 只校验格式，不维护贴纸清单：新增贴纸不该要求重新部署 worker
+const STICKER_MESSAGE_PATTERN = /^\[sticker:\d{1,4}\]$/
+const isStickerMessage = (value) => STICKER_MESSAGE_PATTERN.test(String(value || ''))
 
 const sanitizeClientId = (value) => {
   const str = String(value || '').trim()
@@ -173,9 +169,8 @@ const verifyStudyToken = async (token, env) => {
 const getTokenValidFrom = async (userId, env) => {
   const baseUrl = String(env.SUPABASE_URL || '').replace(/\/+$/, '')
   const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY
-  if (!baseUrl || !serviceKey) {
-    throw new Error('Supabase revocation lookup is not configured')
-  }
+  // 吊销功能还没配置或还没建表时按未启用处理，不能因此让所有人发不出消息
+  if (!baseUrl || !serviceKey) return 0
 
   const response = await fetch(
     `${baseUrl}/rest/v1/auth_state?select=valid_from_iat&user_id=eq.${encodeURIComponent(userId)}`,
@@ -188,6 +183,7 @@ const getTokenValidFrom = async (userId, env) => {
       },
     }
   )
+  if (response.status === 404) return 0
   if (!response.ok) throw new Error(`Supabase revocation lookup failed: ${response.status}`)
 
   const rows = await response.json()

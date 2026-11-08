@@ -47,7 +47,8 @@
       <ChatPanel
         :messages="messages"
         :pending-messages="pendingMessages"
-        :retry-message="retryMessage"
+        :failed-drafts="failedDrafts"
+        :dismiss-failed="dismissFailed"
         :online-count="onlineCount"
         :is-connected="isConnected"
         :is-authenticated="isAuthenticated"
@@ -89,7 +90,8 @@ import ChatPanel from './ChatPanel.vue'
 const props = defineProps({
   messages: { type: Array, default: () => [] },
   pendingMessages: { type: Array, default: () => [] },
-  retryMessage: { type: Function, default: null },
+  failedDrafts: { type: Array, default: () => [] },
+  dismissFailed: { type: Function, default: null },
   onlineCount: { type: Number, default: 0 },
   isConnected: { type: Boolean, default: false },
   isAuthenticated: { type: Boolean, default: false },

@@ -72,7 +72,7 @@ test('an unsent message survives a reload', (t) => {
   assert.equal(sent[0].content, '离线时写的消息')
 })
 
-test('a message that never gets confirmed is marked failed', (t) => {
+test('a message that never gets confirmed goes back to the input', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   store.clear()
   const sent = []
@@ -84,7 +84,9 @@ test('a message that never gets confirmed is marked failed', (t) => {
   t.mock.timers.tick(10000)
 
   assert.equal(sent.length, 3)
-  assert.deepEqual(outbox.pendingMessages.value.map(item => item.status), ['failed'])
+  assert.deepEqual(outbox.pendingMessages.value, [])
+  assert.deepEqual(outbox.failedDrafts.value.map(item => item.content), ['发不出去'])
+  assert.deepEqual(JSON.parse(store.get('chat_outbox_v1')), [])
 })
 
 test('a rate limited message waits and is sent again', (t) => {
