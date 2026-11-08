@@ -1,5 +1,15 @@
 export const updates = [
   {
+  date: '2026-11-9',
+  content: [
+    '＞﹏＜卖个萌',
+    '聊天室：新增多个表情包,根据使用率隐藏了部分表情包',
+  ],
+  images:[
+    '/update/miku10.jpg',
+  ]
+  },
+  {
   date: '2026-11-8',
   content: [
     '马上本站就一周年了！时间过得真的好快啊啊啊~',
