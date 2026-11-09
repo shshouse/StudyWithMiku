@@ -7,9 +7,7 @@ const MIKUMOD_API = import.meta.env.VITE_MIKUMOD_API_URL
 const syncStatus = ref('idle')
 const lastSyncTime = ref(null)
 
-const clone = (value) => typeof structuredClone === 'function'
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value))
+const clone = (value) => value === undefined ? undefined : JSON.parse(JSON.stringify(value))
 
 const isRevision = (value) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 
@@ -249,14 +247,20 @@ export function useStudySync({ onDataMerged } = {}) {
         if (!isLoggedIn.value) return false
 
         syncStatus.value = 'syncing'
-        const [dataOk, calOk] = await Promise.all([
-            pushData(stats, todos, settings),
-            calendarData ? pushCalendar(calendarData.dailyLog, calendarData.plans) : Promise.resolve(true),
-        ])
+        try {
+            const [dataOk, calOk] = await Promise.all([
+                pushData(stats, todos, settings),
+                calendarData ? pushCalendar(calendarData.dailyLog, calendarData.plans) : Promise.resolve(true),
+            ])
 
-        syncStatus.value = (dataOk && calOk) ? 'done' : 'error'
-        if (dataOk && calOk) lastSyncTime.value = new Date()
-        return dataOk && calOk
+            syncStatus.value = (dataOk && calOk) ? 'done' : 'error'
+            if (dataOk && calOk) lastSyncTime.value = new Date()
+            return dataOk && calOk
+        } catch (error) {
+            console.error('Push all error:', error)
+            syncStatus.value = 'error'
+            return false
+        }
     }
 
     const syncOnLogin = async (localStats, localTodos, localSettings) => {

@@ -2,9 +2,7 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 
 const clone = (value) => {
     if (value === undefined) return undefined
-    return typeof structuredClone === 'function'
-        ? structuredClone(value)
-        : JSON.parse(JSON.stringify(value))
+    return JSON.parse(JSON.stringify(value))
 }
 
 export function deepEqual(left, right) {

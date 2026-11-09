@@ -89,3 +89,19 @@ test('远端新增待办排在本地列表之后', () => {
 
     assert.deepEqual(merged.todos.map(item => item.id), ['local', 'remote'])
 })
+
+test('传入响应式对象（Proxy）不会抛错', () => {
+    const reactive = value => new Proxy(value, {
+        get: (target, key) => target[key],
+        ownKeys: target => Reflect.ownKeys(target),
+        getOwnPropertyDescriptor: (target, key) => Reflect.getOwnPropertyDescriptor(target, key),
+    })
+
+    const local = reactive({ stats: stats(100, 2), todos: [{ id: 1, text: 'a' }], settings: { theme: 'dark' } })
+    const remote = reactive({ stats: stats(50, 1), todos: [], settings: {} })
+
+    const merged = mergeStudyData(undefined, local, remote)
+
+    assert.equal(merged.stats.totalStudyTime, 100)
+    assert.deepEqual(merged.todos.map(item => item.id), [1])
+})
