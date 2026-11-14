@@ -287,10 +287,10 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.14);
-  -webkit-backdrop-filter: blur(10px) saturate(1.05);
-  backdrop-filter: blur(10px) saturate(1.05);
-  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   overflow: hidden;
   color: white;
   user-select: none;
