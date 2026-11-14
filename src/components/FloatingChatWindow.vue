@@ -306,17 +306,18 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05);
+  backdrop-filter: blur(10px) saturate(1.05);
+  border: 1px solid rgba(255, 255, 255, 0.26);
   overflow: hidden;
   color: white;
   user-select: none;
-  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+  transition: border-color 0.3s ease;
 }
 .floating-chat.dragging,
 .floating-chat.resizing {
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(57, 197, 187, 0.35);
+  border-color: rgba(57, 197, 187, 0.5);
 }
 .floating-chat-header {
   display: flex;
@@ -380,7 +381,32 @@ onUnmounted(() => {
   min-height: 0;
   max-height: none;
   flex: 1;
+  background: rgba(6, 10, 16, 0.14);
+  border-color: rgba(255, 255, 255, 0.12);
 }
+.floating-chat-body :deep(.chat-message-bubble) {
+  background: rgba(6, 10, 16, 0.2);
+  border-color: rgba(255, 255, 255, 0.13);
+}
+.floating-chat-body :deep(.chat-message-group.own .chat-message-bubble) {
+  background: rgba(20, 120, 114, 0.3);
+  border-color: rgba(57, 197, 187, 0.36);
+}
+.floating-chat-body :deep(.chat-message-item),
+.floating-chat-body :deep(.chat-message-name) {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+.floating-chat-body :deep(.chat-message-name) { color: rgba(255, 255, 255, 0.96); }
+.floating-chat-body :deep(.chat-message-meta) { color: rgba(255, 255, 255, 0.74); }
+.floating-chat-body :deep(.chat-message-location) {
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.88);
+}
+.floating-chat-body :deep(.chat-input-wrapper) {
+  background: rgba(6, 10, 16, 0.22);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.floating-chat-body :deep(.chat-input::placeholder) { color: rgba(255, 255, 255, 0.52); }
 .floating-chat-resize-handle {
   position: absolute;
   right: 2px;

@@ -287,17 +287,18 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05);
+  backdrop-filter: blur(10px) saturate(1.05);
+  border: 1px solid rgba(255, 255, 255, 0.26);
   overflow: hidden;
   color: white;
   user-select: none;
-  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+  transition: border-color 0.3s ease;
 }
 .floating-todo.dragging,
 .floating-todo.resizing {
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(57, 197, 187, 0.35);
+  border-color: rgba(57, 197, 187, 0.5);
 }
 .floating-todo-header {
   display: flex;
