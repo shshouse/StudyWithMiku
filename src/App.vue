@@ -399,7 +399,7 @@ onMounted(() => {
     aplayer.value = new APlayerCtor({
       container: document.getElementById('aplayer'),
       fixed: true,
-      autoplay: true,
+      autoplay: false,
       audio: [],
       lrcType: 3,
       theme: '#2980b9',

@@ -816,13 +816,23 @@ const deleteTodo = (id) => {
 }
 
 const STATS_KEY = 'study_stats'
-const getToday = () => new Date().toDateString()
+// 与日历共用的本地日期，避免两处各自格式化出现几天后互相不一致
+const pad2 = (value) => String(value).padStart(2, '0')
+const formatLocalDate = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+const getToday = () => formatLocalDate(new Date())
+const normalizeStudyDate = (value) => {
+  if (typeof value !== 'string' || !value) return ''
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? '' : formatLocalDate(parsed)
+}
 const createDefaultStats = () => ({ totalStudyTime: 0, totalPomodoros: 0, todayStudyTime: 0, todayPomodoros: 0, lastDate: getToday() })
 const loadStats = () => {
   try {
     const saved = localStorage.getItem(STATS_KEY)
     if (saved) {
       const data = JSON.parse(saved)
+      // 旧版本把 lastDate 存成 toDateString 的文本，直接比较会让每个旧用户都被判定成跨天而清零
+      data.lastDate = normalizeStudyDate(data.lastDate)
       if (data.lastDate !== getToday()) { data.todayStudyTime = 0; data.todayPomodoros = 0; data.lastDate = getToday(); localStorage.setItem(STATS_KEY, JSON.stringify(data)) }
       return data
     }
@@ -849,8 +859,16 @@ const backupLocalStudyData = () => {
     }))
   } catch {}
 }
-const addStudyTime = (seconds) => { studyStats.totalStudyTime += seconds; studyStats.todayStudyTime += seconds; saveStats(); calendarRecordStudy(seconds) }
-const addPomodoro = () => { studyStats.totalPomodoros++; studyStats.todayPomodoros++; saveStats(); calendarRecordPomodoro() }
+// 页面常驻跨过午夜时，本地“今日”不会自己归零；每次累加前按真实日期校正一次
+const rollStudyDay = () => {
+  const today = getToday()
+  if (studyStats.lastDate === today) return
+  studyStats.todayStudyTime = 0
+  studyStats.todayPomodoros = 0
+  studyStats.lastDate = today
+}
+const addStudyTime = (seconds) => { rollStudyDay(); studyStats.totalStudyTime += seconds; studyStats.todayStudyTime += seconds; saveStats(); calendarRecordStudy(seconds) }
+const addPomodoro = () => { rollStudyDay(); studyStats.totalPomodoros++; studyStats.todayPomodoros++; saveStats(); calendarRecordPomodoro() }
 const resetStats = () => { studyStats.totalStudyTime = 0; studyStats.totalPomodoros = 0; studyStats.todayStudyTime = 0; studyStats.todayPomodoros = 0; studyStats.lastDate = getToday(); saveStats() }
 const formatStudyTime = (seconds) => { const h = Math.floor(seconds / 3600); const m = Math.floor((seconds % 3600) / 60); return h > 0 ? `${h}小时${m}分钟` : `${m}分钟` }
 

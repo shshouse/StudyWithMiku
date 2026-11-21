@@ -1,5 +1,15 @@
 export const updates = [
   {
+  date: '2026-11-21',
+  content: [
+    '1.云同步：修复今日学习的显示错误',
+    '2.音乐：进入学习室不再自动播放',
+  ],
+  images:[
+    '/update/miku12.jpg',
+  ]
+  },
+  {
   date: '2026-11-9',
   content: [
     '＞﹏＜卖个萌',

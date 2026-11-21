@@ -105,3 +105,31 @@ test('传入响应式对象（Proxy）不会抛错', () => {
     assert.equal(merged.stats.totalStudyTime, 100)
     assert.deepEqual(merged.todos.map(item => item.id), [1])
 })
+
+test('旧版 toDateString 日期与新版 YYYY-MM-DD 能视为同一天合并今日增量', () => {
+    const base = { stats: stats(100, 2) }
+    const local = { stats: stats(160, 4, { lastDate: 'Sat Nov 08 2026' }) }
+    const remote = { stats: stats(130, 5, { lastDate: '2026-11-08' }) }
+
+    const merged = mergeStudyData(base, local, remote)
+
+    assert.equal(merged.stats.lastDate, '2026-11-08')
+    assert.equal(merged.stats.todayStudyTime, 190)
+    assert.equal(merged.stats.todayPomodoros, 7)
+})
+
+test('较新的本地日期决定今日数值，不受格式影响', () => {
+    const local = { stats: stats(100, 2, { lastDate: '2026-11-09' }) }
+    const remote = { stats: stats(80, 3, { lastDate: 'Sun Nov 08 2026' }) }
+
+    const merged = mergeStudyData(undefined, local, remote)
+
+    assert.equal(merged.stats.lastDate, '2026-11-09')
+    assert.equal(merged.stats.todayStudyTime, 100)
+})
+
+test('无法解析的日期不会让合并抛错', () => {
+    const merged = mergeStudyData(undefined, { stats: stats(10, 1, { lastDate: 'garbage' }) }, { stats: stats(20, 2) })
+
+    assert.equal(merged.stats.totalStudyTime, 20)
+})

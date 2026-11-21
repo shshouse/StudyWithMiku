@@ -62,6 +62,15 @@ const mergeObject = (base, local, remote) => {
 
 const numberOrNull = (value) => typeof value === 'number' && Number.isFinite(value) ? value : null
 
+const pad2 = (value) => String(value).padStart(2, '0')
+const normalizeDate = (value) => {
+    if (typeof value !== 'string' || !value) return ''
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime())
+        ? ''
+        : `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`
+}
+
 const mergeStats = (base, local, remote) => {
     if (!isObject(remote)) return clone(local)
     if (!isObject(local)) return clone(remote)
@@ -80,9 +89,10 @@ const mergeStats = (base, local, remote) => {
         }
     }
 
-    const localDate = typeof local.lastDate === 'string' ? local.lastDate : ''
-    const remoteDate = typeof remote.lastDate === 'string' ? remote.lastDate : ''
-    const baseDate = typeof baseStats.lastDate === 'string' ? baseStats.lastDate : ''
+    // 旧版本把日期存成 toDateString 文本，云端和本地可能混着两种格式，先归一再比较
+    const localDate = normalizeDate(local.lastDate)
+    const remoteDate = normalizeDate(remote.lastDate)
+    const baseDate = normalizeDate(baseStats.lastDate)
     const latestDate = localDate > remoteDate ? localDate : remoteDate
     if (latestDate) result.lastDate = latestDate
 
