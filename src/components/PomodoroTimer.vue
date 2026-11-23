@@ -2136,10 +2136,12 @@ const handleVisibilityChange = () => {
   box-sizing: border-box;
   color: white;
   font-family: inherit;
-  background: rgba(20, 24, 30, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.36);
+  background: rgba(20, 24, 30, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
   pointer-events: none;
   transform: translate(-50%, -50%);
   animation: sync-toast-pop 0.35s cubic-bezier(0.22, 1.3, 0.36, 1);
