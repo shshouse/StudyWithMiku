@@ -52,8 +52,8 @@ export const recommendPlaylists = [
     name: '看书刷题纯音乐',
     desc: '',
     platform: 'netease',
-    playlistId: '18010565030',
-    tags: ['低BPM','纯音乐','By 狐十一狸']
+    playlistId: '2399935867',
+    tags: ['低BPM','纯音乐','By leaf_998']
   },
   {
     name: '东方精选集',

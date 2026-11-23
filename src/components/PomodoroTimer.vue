@@ -236,15 +236,15 @@
                   <div class="recommend-title">我的歌单</div>
                   <div v-if="customPlaylists.length === 0" class="custom-empty">还没有歌单＞﹏＜</div>
                   <div class="recommend-list custom-list">
-                    <div v-for="item in customPlaylists" :key="keyOf(item)" class="recommend-item" :class="{ 'item-active': item.platform === platform && item.playlistId === playlistId }">
-                      <div class="recommend-header" @click="applyCustomItem(item)">
-                        <span class="recommend-name">{{ item.name }}</span>
-                        <span class="recommend-desc">{{ PLATFORMS.find(p => p.value === item.platform)?.label }}</span>
-                      </div>
-                      <div class="recommend-meta">
+                    <div v-for="item in customPlaylists" :key="keyOf(item)" class="recommend-item custom-item" :class="{ 'item-active': item.platform === platform && item.playlistId === playlistId }">
+                      <button type="button" class="custom-main" @click="applyCustomItem(item)">
+                        <span class="custom-title-row">
+                          <span class="recommend-name">{{ item.name }}</span>
+                          <span class="custom-platform">{{ PLATFORMS.find(p => p.value === item.platform)?.label }}</span>
+                        </span>
                         <span class="recommend-id-text">ID: {{ item.playlistId }}</span>
-                        <button class="remove-btn" :class="{ confirming: confirmingKey === keyOf(item) }" @click.stop="removeCustomItem(item)">{{ confirmingKey === keyOf(item) ? '确认删除' : '删除' }}</button>
-                      </div>
+                      </button>
+                      <button class="remove-btn" :class="{ confirming: confirmingKey === keyOf(item) }" @click.stop="removeCustomItem(item)">{{ confirmingKey === keyOf(item) ? '确认删除' : '删除' }}</button>
                     </div>
                   </div>
                 </div>
@@ -1911,15 +1911,19 @@ const handleVisibilityChange = () => {
 .song-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .custom-empty { font-size: 0.8rem; color: rgba(255, 255, 255, 0.4); text-align: left; padding: 0.2rem 0; }
 .recommend-item.item-active { border-color: rgba(41, 128, 185, 0.7); background: rgba(41, 128, 185, 0.12); }
-.remove-btn { background: none; border: none; color: rgba(255, 255, 255, 0.4); font-size: 0.7rem; cursor: pointer; padding: 0.2rem 0.4rem; border-radius: 4px; transition: all 0.2s ease; }
+.remove-btn { flex-shrink: 0; background: none; border: none; color: rgba(255, 255, 255, 0.4); font-size: 0.75rem; cursor: pointer; padding: 0.2rem 0.4rem; border-radius: 4px; transition: all 0.2s ease; }
 .remove-btn:hover { color: rgba(255, 120, 120, 0.9); background: rgba(255, 80, 80, 0.12); }
 .remove-btn.confirming { color: rgba(255, 140, 140, 0.95); background: rgba(255, 80, 80, 0.2); }
-.recommend-id-text { font-size: 0.7rem; color: rgba(255, 255, 255, 0.5); }
-/* 我的歌单双列 */
-.recommend-list.custom-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
-.recommend-list.custom-list .recommend-item { padding: 0.7rem 0.9rem; gap: 0.4rem; }
-.recommend-list.custom-list .recommend-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 520px) { .recommend-list.custom-list { grid-template-columns: 1fr; } }
+.recommend-id-text { font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); font-variant-numeric: tabular-nums; }
+/* 我的歌单：单列行，窄面板下 ID 与删除不再换行 */
+.recommend-list.custom-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.recommend-list.custom-list .custom-item { flex-direction: row; align-items: center; gap: 0.75rem; padding: 0.65rem 0.9rem; }
+.custom-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; padding: 0; background: none; border: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 4px; }
+.custom-main:hover { opacity: 0.82; }
+.custom-main:focus-visible { outline: 2px solid rgba(57, 197, 187, 0.8); outline-offset: 2px; }
+.custom-title-row { display: flex; align-items: center; gap: 0.5rem; width: 100%; min-width: 0; }
+.custom-title-row .recommend-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.custom-platform { flex-shrink: 0; font-size: 0.75rem; line-height: 1.5; color: rgba(255, 255, 255, 0.62); padding: 0 0.5rem; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 999px; }
 .playlist-id-input { min-width: 0; }
 .help-btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
 .playlist-recommend { margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255, 255, 255, 0.1); width: 100%; max-width: 400px; }
@@ -2132,12 +2136,10 @@ const handleVisibilityChange = () => {
   box-sizing: border-box;
   color: white;
   font-family: inherit;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.08));
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 14px;
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  background: rgba(20, 24, 30, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.36);
   pointer-events: none;
   transform: translate(-50%, -50%);
   animation: sync-toast-pop 0.35s cubic-bezier(0.22, 1.3, 0.36, 1);
