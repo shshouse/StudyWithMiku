@@ -224,7 +224,7 @@
                 </div>
                 <div class="setting-group setting-group-row">
                   <label>歌单ID</label>
-                  <input type="text" v-model="inputPlaylistId" placeholder="歌单ID" class="playlist-id-input" @keyup.enter="applyPlaylist"/>
+                  <input type="text" v-model="inputPlaylistId" placeholder="歌单ID 或分享链接" class="playlist-id-input" @keyup.enter="applyPlaylist"/>
                   <button class="action-btn apply-btn" @click="applyPlaylist">获取</button>
                 </div>
                 <div class="playlist-actions">
@@ -508,6 +508,7 @@
   import { useStudySync } from '../composables/useStudySync.js'
   import { useCalendar } from '../composables/useCalendar.js'
   import { useUserProfiles } from '../composables/useUserProfiles.js'
+import { extractPlaylistId } from '../utils/playlistId.js'
 
 const UPDATE_READ_KEY = 'last_read_update'
 const PLAYLIST_READ_KEY = 'last_read_playlist'
@@ -874,8 +875,21 @@ const formatStudyTime = (seconds) => { const h = Math.floor(seconds / 3600); con
 
 const refreshPlayerList = () => { const ap = getAPlayerInstance(); if (ap) { ap.list.clear(); ap.list.add(songs.value) } }
 const applyPlaylist = async () => {
-  const id = inputPlaylistId.value.trim()
-  if (!id) return
+  const raw = inputPlaylistId.value.trim()
+  if (!raw) return
+
+  // 允许直接粘贴整条分享链接：自动抠出歌单 ID，并按域名把平台选对
+  const parsed = extractPlaylistId(raw)
+  if (!parsed.id) {
+    triggerSyncToastText('没找到歌单ID', '试试只填纯数字，或粘贴整条分享链接')
+    return
+  }
+  if (parsed.platform && parsed.platform !== selectedPlatform.value) {
+    selectedPlatform.value = parsed.platform
+  }
+  inputPlaylistId.value = parsed.id
+
+  const id = parsed.id
   const p = selectedPlatform.value
   const ok = await applyCustomPlaylist(p, id)
   if (ok === null) return
